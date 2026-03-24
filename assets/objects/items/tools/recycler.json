@@ -1,0 +1,13 @@
+{
+    "display_name": "Recycler",
+    "description": "Tool used to recycle items used to craft buildings",
+    "category": "tools",
+    "stack_size": 1,
+    "create_data": {
+        "type": "hands",
+        "time_s": 5,
+        "recipe": [
+            ["iron_gear", 10]
+        ]
+    }
+}

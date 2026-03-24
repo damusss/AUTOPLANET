@@ -1,0 +1,12 @@
+{
+    "display_name": "Hopper",
+    "description": "",
+    "stack_size": "default_building",
+    "create_data": {
+        "type": "hands",
+        "time_s": 2,
+        "recipe": [
+            ["iron_tank", 1]
+        ]
+    }
+}

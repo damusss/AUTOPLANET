@@ -1,0 +1,12 @@
+{
+    "display_name": "Cables",
+    "description": "",
+    "create_data": {
+        "type": "hands",
+        "time_s": "3",
+        "recipe": [
+            ["copper_wires", 2],
+            ["plastic", 2]
+        ]
+    }
+}

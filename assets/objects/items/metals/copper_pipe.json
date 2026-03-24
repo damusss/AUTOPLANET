@@ -1,0 +1,9 @@
+{
+    "display_name": "Copper Pipe",
+    "description": "",
+    "create_data": {
+        "type": "hands",
+        "time_s": 1,
+        "recipe": [["copper", 5]]
+    }
+}

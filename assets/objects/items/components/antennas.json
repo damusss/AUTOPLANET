@@ -1,0 +1,13 @@
+{
+    "display_name": "Antennas",
+    "description": "",
+    "create_data": {
+        "type": "hands",
+        "time_s": 3,
+        "recipe": [
+            ["microchip", 1],
+            ["cables", 1],
+            ["iron", 3]
+        ]
+    }
+}

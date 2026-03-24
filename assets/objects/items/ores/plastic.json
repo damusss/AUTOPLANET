@@ -1,0 +1,9 @@
+{
+    "display_name": "Plastic",
+    "description": "",
+    "create_data": {
+        "type": "furnace",
+        "time_s": 3,
+        "recipe": [["nylium_fiber", 1]]
+    }
+}

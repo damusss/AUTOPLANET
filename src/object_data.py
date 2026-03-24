@@ -1,0 +1,324 @@
+import os
+import json
+import typing
+from dataclasses import dataclass
+
+from src import constants
+
+
+class ObjectDataInstanceGetter[T]:
+    def __init__(self, cls):
+        self._cls = cls
+
+    def __getattr__(self, name: str) -> T:
+        return self._cls.get(name)
+
+    def __dir__(self):
+        return list(self._cls.get_all().keys())
+
+
+class ObjectSingleton:
+    _registered_types_ = {}
+
+    @classmethod
+    def _init_(cls, attributes: dict):
+        for name in cls.__annotations__.keys():
+            setattr(cls, name, attributes[name])
+
+    def __init_subclass__(cls):
+        ObjectSingleton._registered_types_[cls.__name__] = cls
+
+
+class ObjectData:
+    uid: int
+    name_id: str
+    data_type: type
+
+    display_name: str
+    description: str
+
+    _registered_types_ = {}
+
+    def __init__(self, attributes: dict):
+        if not hasattr(self, "_required_attributes_"):
+            raise TypeError(
+                "Cannot instantiate 'ObjectData' directly. Instantiate a valid subclass instead"
+            )
+        for name in self._required_attributes_:
+            if name not in attributes:
+                if name in self.__class__.DEFAULTS:
+                    value = self.__class__.DEFAULTS[name]
+                else:
+                    raise KeyError(
+                        f"Failed to instantiate '{self.__class__.__name__}' object data: missing attribute '{name}' (attributes: {attributes})"
+                    )
+            else:
+                value = attributes[name]
+            setattr(self, name, value)
+            if name in self.__class__._registered_properties_:
+                self.__class__._registered_properties_[name][value] = self
+        self.__class__._registered_instances_[self.name_id] = self
+        self.__class__._registered_uid_instances_[self.uid] = self
+        self.setup()
+
+    def __init_subclass__(cls, **arguments):
+        if "type_name" not in arguments:
+            raise TypeError(
+                "Failed to create an ObjectData subclass. Missing argument 'type_name'"
+            )
+        cls._required_attributes_ = list(ObjectData.__annotations__.keys()) + list(
+            cls.__annotations__.keys()
+        )
+        ObjectData._registered_types_[arguments["type_name"]] = cls
+        cls.type_name = arguments["type_name"]
+        cls._registered_instances_ = {}
+        cls._registered_uid_instances_ = {}
+        cls._registered_properties_ = {
+            prop: {} for prop in arguments.get("registered_properties", [])
+        }
+        cls.objects = ObjectDataInstanceGetter[cls](cls)
+
+    def __str__(self):
+        res = f"[Object Data] {self.__class__.type_name}(\n"
+        longest = max([len(attr) for attr in self._required_attributes_]) + 1
+        for name in self._required_attributes_:
+            value = getattr(self, name)
+            if isinstance(value, type):
+                continue
+            res += f"\t{name}".ljust(longest) + f": {value}\n"
+        res += ")"
+        return res
+
+    def __repr__(self):
+        return f"<Object Data '{self.__class__.type_name}': {self.name_id}:{self.uid}>"
+
+    def __eq__(self, other: typing.Self):
+        if not isinstance(other, ObjectData):
+            return False
+        return self.uid == other.uid
+
+    def setup(self): ...
+
+    def post_setup(self): ...
+
+    @classmethod
+    def exists(cls, name_id_or_uid: str | int) -> bool:
+        return (
+            name_id_or_uid in cls._registered_instances_
+            or name_id_or_uid in cls._registered_uid_instances_
+        )
+
+    @classmethod
+    def get(cls, name_id_or_uid: str | int) -> typing.Self:
+        if isinstance(name_id_or_uid, int):
+            return cls.get_by_id(name_id_or_uid)
+        return cls.get_by_name(name_id_or_uid)
+
+    @classmethod
+    def get_or[DT](cls, name_id_or_uid: str | int, default: DT) -> typing.Self | DT:
+        if cls.exists(name_id_or_uid):
+            return cls.get(name_id_or_uid)
+        return default
+
+    @classmethod
+    def get_by_name(cls, name_id: str) -> typing.Self:
+        if name_id in cls._registered_instances_:
+            return cls._registered_instances_[name_id]
+        raise KeyError(
+            f"No object data instance '{name_id}' of type '{cls.type_name}' exists"
+        )
+
+    @classmethod
+    def get_by_id(cls, uid: int) -> typing.Self:
+        if uid in cls._registered_uid_instances_:
+            return cls._registered_uid_instances_[uid]
+        raise KeyError(f"No object with UID '{uid}' of type '{cls.type_name}' exists")
+
+    @classmethod
+    def get_by_prop(cls, property_name: str, prop) -> typing.Self:
+        if property_name not in cls._registered_properties_:
+            raise KeyError(
+                f"Property '{property_name}' was not registered for '{cls.type_name}'"
+            )
+        if prop in cls._registered_properties_[property_name]:
+            return cls._registered_properties_[property_name][prop]
+        raise KeyError(
+            f"No object data instance with property '{prop}' of type '{cls.type_name}' exists"
+        )
+
+    @classmethod
+    def get_all(cls) -> dict[str, typing.Self]:
+        return cls._registered_instances_
+
+    @classmethod
+    def get_list(cls) -> list[typing.Self]:
+        return list(cls._registered_instances_.values())
+
+    @staticmethod
+    def get_type(type_name: str) -> "type[ObjectData]":
+        return ObjectData._registered_types_[type_name]
+
+
+class TileOD(ObjectData, type_name="Tile"):
+    item_drop: list[tuple["ItemOD", int]]
+    break_requirements_id: str
+    break_time_s: float
+
+    def post_setup(self):
+        drop = []
+        for name_id, amount in self.item_drop:
+            drop.append((ItemOD.get(name_id), amount))
+        self.item_drop = drop
+
+
+@dataclass
+class ItemCreateData:
+    type: str
+    time_s: float
+    amount: int
+    recipe: list[tuple["ItemOD", int]]
+
+
+class ItemOD(ObjectData, type_name="Item"):
+    DEFAULTS = {
+        "dropped_by": None,
+        "category": None,
+        "stack_size": "default",
+        "smelt_result": None,
+    }
+
+    stack_size: int
+    create_data: ItemCreateData | None
+    smelt_result: "ItemOD|None"
+    dropped_by: "TileOD|None"
+    category: str | None
+
+    @property
+    def building(self):
+        return BuildingOD.get_or(self.name_id, None)
+
+    def setup(self):
+        if self.description == "":
+            self.description = "NOTIMPLEMENTED"
+        if self.stack_size == "default":
+            self.stack_size = constants.DEFAULT_STACK_SIZE
+        elif self.stack_size == "default_building":
+            self.stack_size = constants.BUILDING_DEFAULT_STACK_SIZE
+        elif self.stack_size == "default_platform":
+            self.stack_size = constants.PLATFORM_DEFAULT_STACK_SIZE
+        if self.create_data is not None:
+            self.create_data = ItemCreateData(
+                self.create_data["type"],
+                self.create_data["time_s"],
+                self.create_data.get("amount", 1),
+                self.create_data["recipe"],
+            )
+
+    def post_setup(self):
+        if self.create_data is None:
+            return
+        recipe = self.create_data.recipe
+        recipe_od = []
+        for name_id, amount in recipe:
+            recipe_od.append((ItemOD.get(name_id), amount))
+        self.create_data.recipe = recipe_od
+        if self.smelt_result is not None:
+            self.smelt_result = ItemOD.get(self.smelt_result)
+        if self.dropped_by is not None:
+            self.dropped_by = TileOD.get(self.dropped_by)
+
+
+class BuildingOD(ObjectData, type_name="Building"): ...
+
+
+class VegetationOD(ObjectData, type_name="Vegetation"): ...
+
+
+class BigStar(ObjectSingleton):
+    size_range: tuple[float, float]
+    dust_scale: float
+    colors: list[str]
+    chance: float
+
+
+class Star(ObjectSingleton):
+    size_range: tuple[float, float]
+    chance: float
+
+
+class BlackHole(ObjectSingleton):
+    dust_scale: float
+    size_range: tuple[float, float]
+    chance: 0.007
+
+
+class Dust(ObjectSingleton):
+    num_range: tuple[int, int]
+    size_range: tuple[float, float]
+    gradient_a: str
+    gradient_b: str
+
+
+def load_all(objects_folder: str):
+    with open(os.path.join(objects_folder, "_registry_.json"), "r") as reg_file:
+        registry = json.load(reg_file)
+    for folder in os.listdir(objects_folder):
+        if folder.startswith("_registry_") or folder.startswith("_singletons_"):
+            continue
+        subdir_path = os.path.join(objects_folder, folder)
+        if not os.path.isdir(subdir_path):
+            raise FileExistsError(
+                "Parent folder of object data should only contain subdirectories"
+            )
+        type_path = os.path.join(subdir_path, "_type_.json")
+        if not os.path.exists(type_path):
+            raise FileNotFoundError(
+                f"Objects directory '{folder}' is missing '_type_.json'"
+            )
+        with open(type_path, "r") as type_file:
+            type_name = json.load(type_file)
+        if type_name not in ObjectData._registered_types_:
+            raise KeyError(
+                f"Object data type inside {type_path} '{type_name}' does not have a registered subclass"
+            )
+        if type_name not in registry:
+            registry[type_name] = {}
+            free_id = 0
+        else:
+            if len(registry[type_name]) <= 0:
+                free_id = 0
+            else:
+                free_id = max(registry[type_name].values()) + 1
+        data_type: type[ObjectData] = ObjectData._registered_types_[type_name]
+        object_datas: list[ObjectData] = []
+        for cur_dir, _, files in os.walk(subdir_path):
+            for file_name in files:
+                if file_name.startswith("_type_"):
+                    continue
+                name_id = file_name.split(".")[0]
+                if name_id not in registry[type_name]:
+                    registry[type_name][name_id] = free_id
+                    free_id += 1
+                uid = registry[type_name][name_id]
+                with open(os.path.join(cur_dir, file_name), "r") as file:
+                    data_dict = json.load(file)
+                    data_dict["uid"] = uid
+                    data_dict["name_id"] = name_id
+                    data_dict["data_type"] = data_type
+                od = data_type(data_dict)
+                object_datas.append(od)
+        for od in object_datas:
+            od.post_setup()
+    for singleton_file in os.listdir(os.path.join(objects_folder, "_singletons_")):
+        with open(
+            os.path.join(objects_folder, "_singletons_", singleton_file), "r"
+        ) as file:
+            singleton_type = singleton_file.split(".")[0]
+            singleton_data = json.load(file)
+            if singleton_type not in ObjectSingleton._registered_types_:
+                raise KeyError(
+                    f"Singleton object '{singleton_file}' specifies an unregistered type '{singleton_type}'"
+                )
+            ObjectSingleton._registered_types_[singleton_type]._init_(singleton_data)
+    with open(os.path.join(objects_folder, "_registry_.json"), "w") as reg_file:
+        json.dump(registry, reg_file)

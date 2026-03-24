@@ -1,0 +1,10 @@
+{
+    "display_name": "Stone",
+    "description": "",
+    "stack_size": "default_platform",
+    "create_data": {
+        "type": "hands",
+        "time_s": 0.8,
+        "recipe": [["core_ore", 1]]
+    }
+}

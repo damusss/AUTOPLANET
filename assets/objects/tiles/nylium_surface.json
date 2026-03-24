@@ -1,0 +1,7 @@
+{
+    "display_name": "Nylium Surface",
+    "description": "Surface layer of nylium.",
+    "item_drop": [["nylium_fiber", 1]],
+    "break_requirements_id": null,
+    "break_time_s": 0.35
+}

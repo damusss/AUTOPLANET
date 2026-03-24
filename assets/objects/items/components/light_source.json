@@ -1,0 +1,9 @@
+{
+    "display_name": "Light Source",
+    "description": "",
+    "create_data": {
+        "type": "hands",
+        "time_s": 3,
+        "recipe": [["copper_wires", 3]]
+    }
+}

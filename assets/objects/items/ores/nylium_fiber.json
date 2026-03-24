@@ -1,0 +1,7 @@
+{
+    "display_name": "Nylium Fiber",
+    "description": "Dropped by nylium grass",
+    "smelt_result": "plastic",
+    "create_data": null,
+    "droppped_by": "nylium"
+}

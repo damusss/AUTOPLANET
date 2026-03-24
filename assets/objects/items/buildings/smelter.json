@@ -1,0 +1,14 @@
+{
+    "display_name": "Smelter",
+    "description": "",
+    "stack_size": "default_building",
+    "create_data": {
+        "type": "hands",
+        "time_s": 6,
+        "recipe": [
+            ["deep_brick", 20],
+            ["titanium_plate", 2],
+            ["titanium_bolt", 6]
+        ]
+    }
+}

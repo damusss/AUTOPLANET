@@ -1,0 +1,9 @@
+{
+    "display_name": "Titanium Bolt",
+    "description": "",
+    "create_data": {
+        "type": "hands",
+        "time_s": 1,
+        "recipe": [["titanium", 2]]
+    }
+}

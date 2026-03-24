@@ -1,0 +1,13 @@
+{
+    "display_name": "Thruster",
+    "description": "",
+    "create_data": {
+        "type": "hands",
+        "time_s": 5,
+        "recipe": [
+            ["iron_gear", 1],
+            ["iron_tank", 1],
+            ["copper_pipe", 2]
+        ]
+    }
+}

@@ -1,0 +1,9 @@
+{
+    "display_name": "Glass",
+    "description": "",
+    "create_data": {
+        "type": "smelter",
+        "time_s": 4,
+        "recipe": [["deep_sand", 3]]
+    }
+}

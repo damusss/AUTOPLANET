@@ -1,0 +1,13 @@
+{
+    "display_name": "Energy Transmitter",
+    "description": "",
+    "stack_size": "default_building",
+    "create_data": {
+        "type": "hands",
+        "time_s": 3,
+        "recipe": [
+            ["cables", 2],
+            ["iron", 3]
+        ]
+    }
+}

@@ -1,0 +1,17 @@
+{
+    "display_name": "Observatory",
+    "description": "",
+    "stack_size": 1,
+    "create_data": {
+        "type": "builder",
+        "time_s": 10,
+        "recipe": [
+            ["titanium_bolt", 10],
+            ["titanium_plate", 5],
+            ["iron_tank", 2],
+            ["glass", 4],
+            ["lenses", 3],
+            ["motherboard", 1]
+        ]
+    }
+}

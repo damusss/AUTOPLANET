@@ -1,0 +1,17 @@
+{
+    "display_name": "Motherboard",
+    "description": "",
+    "stack_size": 20,
+    "create_data": {
+        "type": "builder",
+        "time_s": 10,
+        "recipe": [
+            ["cables", 3],
+            ["microchip", 5],
+            ["diamond", 10],
+            ["antennas", 1],
+            ["remote_controller", 1],
+            ["titanium_plate", 2]
+        ]
+    }
+}

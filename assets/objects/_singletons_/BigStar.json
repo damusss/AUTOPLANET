@@ -1,0 +1,15 @@
+{
+    "size_range": [2, 4],
+    "dust_scale": 4,
+    "colors": [
+        "#FF0000",
+        "#FF4300",
+        "#CC00FF",
+        "#FFF300",
+        "#00EDFF",
+        "#00FFA3",
+        "#FFC800",
+        "#f763f7"
+    ],
+    "chance": 0.09
+}

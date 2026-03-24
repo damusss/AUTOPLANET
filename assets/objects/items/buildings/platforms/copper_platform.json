@@ -1,0 +1,10 @@
+{
+    "display_name": "Copper Platform",
+    "description": "",
+    "stack_size": "default_platform",
+    "create_data": {
+        "type": "hands",
+        "time_s": 0.8,
+        "recipe": [["copper", 8]]
+    }
+}

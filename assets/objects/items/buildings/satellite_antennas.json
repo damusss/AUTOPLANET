@@ -1,0 +1,16 @@
+{
+    "display_name": "Satellite Antennas",
+    "description": "",
+    "stack_size": 1,
+    "create_data": {
+        "type": "builder",
+        "time_s": 10,
+        "recipe": [
+            ["titanium_bolt", 5],
+            ["titanium_plate", 10],
+            ["antennas", 20],
+            ["laser", 1],
+            ["motherboard", 1]
+        ]
+    }
+}

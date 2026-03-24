@@ -1,0 +1,13 @@
+{
+    "display_name": "Solar Panels",
+    "description": "",
+    "create_data": {
+        "type": "builder",
+        "time_s": 6,
+        "recipe": [
+            ["glass", 20],
+            ["cables", 10],
+            ["iron_plate", 5]
+        ]
+    }
+}

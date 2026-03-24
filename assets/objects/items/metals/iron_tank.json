@@ -1,0 +1,12 @@
+{
+    "display_name": "Iron Tank",
+    "description": "",
+    "create_data": {
+        "type": "hands",
+        "time_s": 1,
+        "recipe": [
+            ["iron", 2],
+            ["iron_plate", 1]
+        ]
+    }
+}

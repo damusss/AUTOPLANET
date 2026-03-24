@@ -1,0 +1,8 @@
+{
+    "display_name": "Copper Ore",
+    "description": "Dropped by a copper ore tile",
+    "stack_size": "default",
+    "smelt_result": "copper",
+    "create_data": null,
+    "dropped_by": "copper_ore"
+}

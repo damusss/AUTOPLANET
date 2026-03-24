@@ -1,0 +1,10 @@
+{
+    "display_name": "Titanium Platform",
+    "description": "",
+    "stack_size": "default_platform",
+    "create_data": {
+        "type": "hands",
+        "time_s": 0.8,
+        "recipe": [["titanium_plate", 2]]
+    }
+}

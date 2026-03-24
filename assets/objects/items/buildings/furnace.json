@@ -1,0 +1,12 @@
+{
+    "display_name": "Furnace",
+    "description": "",
+    "stack_size": "default_building",
+    "create_data": {
+        "type": "hands",
+        "time_s": 4,
+        "recipe": [
+            ["core_brick", 20]
+        ]
+    }
+}

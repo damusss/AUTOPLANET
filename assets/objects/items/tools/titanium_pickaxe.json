@@ -1,0 +1,11 @@
+{
+    "display_name": "Titanium Pickaxe",
+    "description": "General purpose breaking tool.",
+    "category": "tools",
+    "stack_size": 1,
+    "create_data": {
+        "type": "hands",
+        "time_s": 8,
+        "recipe": [["titanium", 10]]
+    }
+}

@@ -1,0 +1,14 @@
+{
+    "display_name": "Mold Spray",
+    "description": "Tool used to remove mold from buildings",
+    "stack_size": 1,
+    "category": "tools",
+    "create_data": {
+        "type": "hands",
+        "time_s": 10,
+        "recipe": [
+            ["ammonia", 10],
+            ["plastic", 10]
+        ]
+    }
+}

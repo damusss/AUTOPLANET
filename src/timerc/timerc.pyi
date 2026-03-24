@@ -1,0 +1,6 @@
+from typing import Callable
+
+type TimerCallback = Callable[[], TimerCallback | None]
+
+def frame(): ...
+def add(cooldown: int, callback: TimerCallback): ...

@@ -1,0 +1,9 @@
+{
+    "display_name": "Titanium",
+    "description": "",
+    "create_data": {
+        "type": "furnace",
+        "time_s": 2,
+        "recipe": [["titanium_ore", 1]]
+    }
+}

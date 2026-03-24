@@ -1,0 +1,13 @@
+{
+    "display_name": "bot",
+    "description": "",
+    "stack_size": "default_platform",
+    "create_data": {
+        "type": "hands",
+        "time_s": 1.5,
+        "recipe": [
+            ["thruster", 1],
+            ["antennas", 1]
+        ]
+    }
+}

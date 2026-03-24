@@ -1,0 +1,7 @@
+{
+    "display_name": "Titanium Ore",
+    "description": "",
+    "smelt_result": "titanium",
+    "create_data": null,
+    "dropped_by": "deep_titanium_ore"
+}

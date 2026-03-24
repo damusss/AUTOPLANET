@@ -1,0 +1,13 @@
+{
+    "display_name": "Laser",
+    "description": "",
+    "create_data": {
+        "type": "hands",
+        "time_s": 5,
+        "recipe": [
+            ["light_source", 1],
+            ["glass", 2],
+            ["titanium_plate", 4]
+        ]
+    }
+}

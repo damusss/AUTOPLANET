@@ -1,0 +1,9 @@
+{
+    "display_name": "Research Chip #2",
+    "description": "",
+    "create_data": {
+        "type": "hands",
+        "time_s": 1,
+        "recipe": [["nylium_fiber", 1]]
+    }
+}

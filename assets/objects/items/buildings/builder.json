@@ -1,0 +1,17 @@
+{
+    "display_name": "builder",
+    "description": "",
+    "stack_size": "default_building",
+    "create_data": {
+        "type": "crafter",
+        "time_s": 10,
+        "recipe": [
+            ["deep_brick", 20],
+            ["titanium_plate", 4],
+            ["titanium_bolt", 6],
+            ["microchip", 2],
+            ["laser", 1],
+            ["diamond", 1]
+        ]
+    }
+}

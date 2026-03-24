@@ -1,0 +1,12 @@
+{
+    "display_name": "Lenses",
+    "description": "",
+    "create_data": {
+        "type": "builder",
+        "time_s": 20,
+        "recipe": [
+            ["glass", 10],
+            ["deep_sand", 50]
+        ]
+    }
+}

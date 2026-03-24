@@ -1,0 +1,7 @@
+{
+    "display_name": "Ammonia Deposit",
+    "description": "",
+    "item_drop": [["ammonia_powder", 2]],
+    "break_requirements_id": "pickaxe",
+    "break_time_s": 0.7
+}

@@ -1,0 +1,16 @@
+{
+    "display_name": "Triple Jetpack",
+    "description": "",
+    "category": "equipement",
+    "create_data": {
+        "type": "hands",
+        "time_s": 20,
+        "recipe": [
+            ["thruster", 3],
+            ["iron_tank", 6],
+            ["cables", 6],
+            ["glass", 10],
+            ["titanium_plate", 4]
+        ]
+    }
+}

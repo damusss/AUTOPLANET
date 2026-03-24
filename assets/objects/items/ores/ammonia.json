@@ -1,0 +1,9 @@
+{
+    "display_name": "Ammonia",
+    "description": "",
+    "create_data": {
+        "type": "furnace",
+        "time_s": 5,
+        "recipe": [["ammonia_powder", 2]]
+    }
+}

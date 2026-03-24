@@ -1,0 +1,6 @@
+{
+    "num_range": [1, 3],
+    "size_range": [9, 18],
+    "gradient_a": "#E29500",
+    "gradient_b": "#A700FF"
+}

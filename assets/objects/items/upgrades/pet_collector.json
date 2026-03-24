@@ -1,0 +1,15 @@
+{
+    "display_name": "Collector Pet",
+    "description": "",
+    "category": "pets",
+    "stack_size": 1,
+    "create_data": {
+        "type": "hands",
+        "time_s": 20,
+        "recipe": [
+            ["bot", 1],
+            ["plastic", 5],
+            ["nylium_fiber", 10]
+        ]
+    }
+}

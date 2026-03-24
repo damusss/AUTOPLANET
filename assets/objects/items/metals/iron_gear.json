@@ -1,0 +1,9 @@
+{
+    "display_name": "Iron Gear",
+    "description": "",
+    "create_data": {
+        "type": "hands",
+        "time_s": 1,
+        "recipe": [["iron", 2]]
+    }
+}

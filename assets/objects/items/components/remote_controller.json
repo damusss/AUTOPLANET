@@ -1,0 +1,13 @@
+{
+    "display_name": "Remote Controller",
+    "description": "",
+    "create_data": {
+        "type": "hands",
+        "time_s": 4,
+        "recipe": [
+            ["antennas", 2],
+            ["microchip", 1],
+            ["plastic", 2]
+        ]
+    }
+}

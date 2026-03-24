@@ -1,0 +1,9 @@
+{
+    "display_name": "Deep Stone Brick",
+    "description": "",
+    "create_data": {
+        "type": "hands",
+        "time_s": 1,
+        "recipe": [["deep_ore", 3]]
+    }
+}

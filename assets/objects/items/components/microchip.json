@@ -1,0 +1,12 @@
+{
+    "display_name": "Microchip",
+    "description": "",
+    "create_data": {
+        "type": "hands",
+        "time_s": "3",
+        "recipe": [
+            ["copper_wires", 3],
+            ["iron_plate", 1]
+        ]
+    }
+}

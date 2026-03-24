@@ -1,0 +1,15 @@
+{
+    "display_name": "Bot Anti-Mold Upgrade",
+    "description": "",
+    "stack_size": 100,
+    "category": "bot_upgrades",
+    "create_data": {
+        "type": "crafter",
+        "time_s": 4,
+        "recipe": [
+            ["diamond", 1],
+            ["ammonia", 10],
+            ["mold_spray", 1]
+        ]
+    }
+}

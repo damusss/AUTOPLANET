@@ -1,0 +1,7 @@
+{
+    "display_name": "Iron Ore",
+    "description": "",
+    "item_drop": [["iron_ore", 1]],
+    "break_requirements_id": "pickaxe",
+    "break_time_s": 0.8
+}

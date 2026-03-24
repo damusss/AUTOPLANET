@@ -1,0 +1,7 @@
+{
+    "display_name": "Titanium Ore",
+    "description": "",
+    "item_drop": [["titanium_ore", 1]],
+    "break_requirements_id": "pickaxe",
+    "break_time_s": 1
+}
