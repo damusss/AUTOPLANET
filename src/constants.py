@@ -1,3 +1,6 @@
+import pygame
+import string
+
 # connection
 OFFLINE_LOCALHOST = True
 SOCKET_ADDR = "localhost"
@@ -58,7 +61,41 @@ INVENTORY_ACTION_MOVE = "move"
 
 INVENTORY_FILTER_WHITELIST = "whitelist"
 INVENTORY_FILTER_CATEGORY = "category"
-ITEM_CATEGORY_NAMES = {"tools": "Tools"}
+ITEM_CATEGORY_NAMES = {
+    "tools": "Tools",
+    "bot_upgrades": "Bot Upgrades",
+    "equipment": "Equipment",
+    "pets": "Pets",
+    "smeltables": "Smeltables",
+    "smelter_smeltables": "Smelter-only Smeltables",
+}
+
+CRAFT_READY = "ready"
+CRAFT_READY_SUBSTEP = "ready_substep"
+CRAFT_NOT_READY = "not_ready"
+CRAFT_UNAVAILABLE = "unavailable"
+
+CRAFT_STATUS_MISSING_REQUIREMENTS = "missing_requirements"
+CRAFT_STATUS_NOT_CRAFTABLE = "not_craftable"
+CRAFT_STATUS_NO_HANDS = "no_hands"
+
+DEFAULT_STACK_SIZE = 200
+BUILDING_DEFAULT_STACK_SIZE = 50
+PLATFORM_DEFAULT_STACK_SIZE = 120
+DROP_SIZE = 0.3
+DROP_IMAGE_SIZE = 0.4
+
+CREATE_HANDS = "hands"
+
+BUILDING_STATUS_WRONG_ALTITUDE = "wa"
+BUILDING_STATUS_MISSING_FLOOR = "mf"
+BUILDING_STATUS_WRONG_FLOOR = "wf"
+BUILDING_STATUS_WRONG_AND_MISSING_FLOOR = "wmf"
+BUILDING_STATUS_COULD_BE_MISSING_FLOOR_OR_TILE = "cmft"
+BUILDING_STATUS_MISSING_FLOOR_AND_TILE = "mft"
+BUILDING_STATUS_OBSTRUCTED = "o"
+BUILDING_STATUS_TOO_FAR = "tf"
+BUILDING_STATUS_AVAILABLE = "a"
 
 # chunk
 CHUNK_SIZE = 12
@@ -75,6 +112,7 @@ TILE_NOT_SOLID_COLOR_MULT = (80, 80, 80)
 
 RAYCAST_EMPTY = "empty"
 RAYCAST_TILE = "tile"
+RAYCAST_BUILDING = "building"
 RAYCAST_UI_ITEM = "item"
 RAYCAST_UI_SLOT_FILTER = "slot_filter"
 
@@ -83,26 +121,46 @@ RAYCASTFLAG_INFO = "info"
 RAYCASTFLAG_COLLIDER = "collider"
 RAYCASTFLAG_ALL = "all"
 
-# items
-CRAFT_HANDS = "hands"
-CRAFT_FURNACE = "furnace"
-CRAFT_CRAFTER = "crafter"
-CRAFT_NONE = None
-
-DEFAULT_STACK_SIZE = 200
-BUILDING_DEFAULT_STACK_SIZE = 50
-PLATFORM_DEFAULT_STACK_SIZE = 120
-DROP_SIZE = 0.3
-DROP_IMAGE_SIZE = 0.4
+BUILDING_ID_LEN = 10
+BUILDING_ID_ALPHABET = string.ascii_letters + string.digits + string.punctuation
+BUILDING_MAX_SIZE = 3
+TILE_PLACED = "p"
 
 # ui
+CURSOR_IDLE_WORLD = pygame.SYSTEM_CURSOR_CROSSHAIR
+CURSOR_IDLE_UI = pygame.SYSTEM_CURSOR_ARROW
+CURSOR_HOVER = pygame.SYSTEM_CURSOR_HAND
+
+FONT_MIN_SIZE = 9 + 7
+
 GREEN_GOOD = "#00DD93"
 RED_BAD = "#EE0055"
 
+BUILDING_STATUS_MESSAGES = {
+    BUILDING_STATUS_WRONG_ALTITUDE: "Can only be placed in a specific altitude range (from Y <r1> to Y <r2>)",
+    BUILDING_STATUS_OBSTRUCTED: "Area is obstructed.",
+    BUILDING_STATUS_WRONG_FLOOR: "Cannot be placed on this floor/terrain.",
+    BUILDING_STATUS_TOO_FAR: "Player is too far from the building location.",
+    BUILDING_STATUS_MISSING_FLOOR: "Cannot be placed mid air.",
+    BUILDING_STATUS_WRONG_AND_MISSING_FLOOR: "Requires a floor and of the correct kind.",
+    BUILDING_STATUS_MISSING_FLOOR_AND_TILE: "Can only be placed without flooring when on top of background tiles.",
+}
+
+CRAFTING_SLOT_COLORS = {
+    CRAFT_READY: GREEN_GOOD,
+    CRAFT_UNAVAILABLE: RED_BAD,
+    CRAFT_NOT_READY: "#C345AA",
+    CRAFT_READY_SUBSTEP: "#B8DD73",
+}
+
 HOVERING_TILE_COLOR = "#FFC800"
 HOVERING_TILE_UNAVAILABLE_COLOR = "#ff0000"
+BUILDING_PREVIEW_ALPHA = 220
 
-FONT_MIN_SIZE = 9 + 7
+PLAYER_NAME_UI_HEIGHT = 0.2
+PLAYER_NAME_UI_COLOR = "#00BB93"
+OTHER_PLAYER_NAME_UI_COLOR = "#888888"
+PLAYER_NAME_UI_ALPHA = 150
 
 CRAFTING_INTERFACE_SECTIONS = [
     {
@@ -110,8 +168,8 @@ CRAFTING_INTERFACE_SECTIONS = [
         "rows": [
             [
                 "nylium_platform",
-                "stone_platform",
-                "deep_stone_platform",
+                "core_platform",
+                "deep_platform",
                 "bricks_platform",
                 "iron_platform",
                 "copper_platform",
@@ -120,25 +178,34 @@ CRAFTING_INTERFACE_SECTIONS = [
             [
                 "hopper",
                 "storage",
+                "nylium_harvester",
                 "furnace",
                 "smelter",
                 "miner",
                 "laser_miner",
             ],  # survival
             ["bot", "crafter", "builder"],  # automation
-            ["mold_sanitizer", "mold_miner"],
-            ["energy_plant", "energy_transmitter"],  # energy
-            ["computer", "laboratory"],  # research
-            ["satellite", "observatory", "satellite_antennas"],  # space research
-            ["lamp", "fan"],  # misc
+            [
+                "energy_plant",
+                "energy_transmitter",
+            ],  # energy
+            ["lamp", "fan", "mold_sanitizer", "mold_miner"],  # misc & mold
+            [
+                "computer",
+                "laboratory",
+                "satellite",
+                "observatory",
+                "satellite_antennas",
+            ],  # research
         ],
     },
     {
         "icon": "gear",
         "rows": [
+            ["core_brick", "deep_brick"],  # bricks
             ["copper", "copper_wires", "copper_pipe"],  # copper
-            ["iron", "iron_gear", "iron_tank"],  # iron
-            ["titanium"],  # titanium
+            ["iron", "iron_gear", "iron_tank", "iron_plate"],  # iron
+            ["titanium", "titanium_bolt", "titanium_plate"],  # titanium
             ["plastic", "glass", "ammonia"],  # other
         ],
     },
@@ -151,7 +218,7 @@ CRAFTING_INTERFACE_SECTIONS = [
                 "research_chip_3",
                 "research_chip_4",
             ],  # research chips
-            ["light", "laser", "solar_panels"],  # lighting
+            ["light_source", "laser", "solar_panels"],  # lighting
             ["cables", "microchip", "motherboard"],  # better gears
             [
                 "antennas",
@@ -165,16 +232,11 @@ CRAFTING_INTERFACE_SECTIONS = [
         "rows": [
             ["pickaxe", "recycler", "mold_spray"],  # tools
             ["jetpack_1", "jetpack_2"],  # jetpack upgrade
-            ["collector_pet", "lamp_pet"],  # pets
+            ["pet_collector", "pet_lamp"],  # pets
             ["bot_upgrade_speed", "bot_upgrade_mold"],  # bot upgrades
         ],
     },
 ]
-
-PLAYER_NAME_UI_HEIGHT = 0.2
-PLAYER_NAME_UI_COLOR = "#00BB93"
-OTHER_PLAYER_NAME_UI_COLOR = "#888888"
-PLAYER_NAME_UI_ALPHA = 150
 
 UI_BORDER_PERCENT = 0.28
 UI_RAYCAST_EMPTY = object()
@@ -187,14 +249,14 @@ UI_PANEL_OUTLINE_HOVER_ALPHA = 255
 UI_BARS_W_MULT = 0.14
 UI_BARS_H_MULT = 0.08
 UI_HEALTH_COL = "#FF1000"
-UI_ENERGY_COL = "#B62AFF"
+UI_ENERGY_COL = "#C300FF"
 UI_BARS_OUTLINE_COL = (100, 100, 100, 255)
 
-UI_RAYCAST_INFO_W_MULT = 0.09
-UI_RAYCAST_INFO_TITLE_H_MULT = 0.17
+UI_RAYCAST_INFO_W_MULT = 0.1
+UI_RAYCAST_INFO_TITLE_H_MULT = 0.15
 UI_RAYCAST_INFO_DESCR_MULT = 0.7
-UI_RAYCAST_INFO_MSG_H_MULT = 0.14
-UI_RAYCAST_INFO_SUBTITLE_H_MULT = 0.15
+UI_RAYCAST_INFO_MSG_H_MULT = 0.12
+UI_RAYCAST_INFO_SUBTITLE_H_MULT = 0.13
 UI_RAYCAST_INFO_DESCR_COL = (180, 180, 180)
 UI_RAYCAST_INFO_CORNER_SIZE_MULT = 0.1
 
@@ -206,9 +268,15 @@ UI_INVENTORY_PADDING_MULT = 0.03
 
 UI_SLOT_CORNER_SIZE_MULT = 0.2
 UI_SLOT_AMOUNT_H_MULT = 0.38
-UI_SLOT_IMAGE_SIZE_MULT = 0.8
+UI_SLOT_IMAGE_SIZE_MULT = 0.75
 UI_SLOT_IMAGE_OFFSET_Y_MULT = 0.05
 UI_SLOT_GHOST_ALPHA = int(255 / 2.5)
+
+UI_CRAFTING_CATEOGORIES_H_MULT = 1.1
+UI_CRAFTING_CATEGORIES_CORNER_SIZE_MULT = 0.2
+
+UI_CRAFT_QUEUE_SLOT_SIZE_MULT = 0.032
+UI_SLOT_PROGRESS_ALPHA = 170
 
 # rendering
 RENDER_FPS = 240

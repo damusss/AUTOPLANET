@@ -41,7 +41,7 @@ def render_panel(
     if rect.h < cs * 2:
         rect.h = cs * 2
     cw = outline_width
-    if bg_color is not None:
+    if bg_color is not None and cs > 0:
         if f"corner_bg_{cs}" in god.assets.cached_texs:
             bg_tex = god.assets.cached_texs[f"corner_bg_{cs}"]
         else:
@@ -53,7 +53,7 @@ def render_panel(
         bg_tex.color = bg_color
     else:
         bg_tex = None
-    if outline_color is not None:
+    if outline_color is not None and cs > 0:
         if f"corner_outline_{cs}_{cw}" in god.assets.cached_texs:
             outline_tex = god.assets.cached_texs[f"corner_outline_{cs}_{cw}"]
         else:

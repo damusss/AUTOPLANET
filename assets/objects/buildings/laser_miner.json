@@ -1,0 +1,13 @@
+{
+    "size": [2, 2],
+    "floor_whitelist": [
+        "core",
+        "ammonia_deposit",
+        "iron_ore",
+        "copper_ore",
+        "deep",
+        "deep_sand",
+        "titanium_ore",
+        "diamond_ore"
+    ]
+}

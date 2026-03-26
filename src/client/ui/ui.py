@@ -1,19 +1,13 @@
 import pygame
 
-from src import shared
 from src import mailbox
 from src import constants
 from src.client import god
 from src.object_data import ItemOD
-from src.client.ui.panel import render_panel, render_panel_bg, render_panel_outline
+from src.client.ui.panel import render_panel_bg, render_panel_outline
 from src.client.ui.raycast_info import RaycastInfoUI
 from src.client.ui.inventory import FloatingSlot
 from src.client.ui.interfaces import InventoryInterface, CraftingInterface
-
-if constants.NEW_RENDER:
-    from pygame._render import Texture, Renderer
-else:
-    from pygame._sdl2 import Texture, Renderer
 
 
 class UIRaycastHit:
@@ -44,8 +38,11 @@ class WorldUI:
         self.raycast_info = RaycastInfoUI()
         self.inventory = InventoryInterface()
         self.crafting_interface = CraftingInterface()
+        self.cursor = constants.CURSOR_IDLE_WORLD
 
     def mouse_clicked(self, event: pygame.Event):
+        if self.open_interface:
+            self.open_interface.mouse_clicked(event)
         for i, slot in enumerate(god.player.inventory_slots):
             if slot.hitbox.collidepoint(event.pos):
                 if self.inventory.floating_slot.source_slot is None:
@@ -171,19 +168,57 @@ class WorldUI:
         )
         pos_tex.draw(None, pos_rect.move_to(topleft=(self.b * 2, box.bottom + self.b)))
 
+    def render_craft_queue(self):
+        slot_size = god.windowing.width * constants.UI_CRAFT_QUEUE_SLOT_SIZE_MULT
+        width = slot_size * len(god.player.craft_queue) + self.b * (
+            len(god.player.craft_queue) - 1
+        )
+        left = god.windowing.width / 2 - width / 2
+        for i, craft_item in enumerate(god.player.craft_queue):
+            rect = pygame.Rect(
+                left + (slot_size + self.b) * i,
+                god.windowing.height - slot_size - self.b,
+                slot_size,
+                slot_size,
+            )
+            self.inventory.render_slot(
+                rect,
+                craft_item,
+                ghost=craft_item.phantom,
+                can_hover=False,
+                amount_at_two=True,
+                image_percentage=(
+                    1
+                    if craft_item.start_time is None
+                    else (pygame.time.get_ticks() - craft_item.start_time)
+                    / (craft_item.item.create_data.time_s * 1000)
+                ),
+            )
+
     def render(self):
+        self.cursor = constants.CURSOR_IDLE_WORLD
         self.b = god.windowing.width * (constants.UI_BORDER_PERCENT / 100)
         self.render_stats()
+        self.render_craft_queue()
         prev_ray = self.ui_raycast
         self.ui_raycast = None
         if self.inventory_open:
             cont, hovering_slot = self.inventory.render(self.b)
+            crafting_slot = False
             if cont.collidepoint(god.input.mouse_screen):
                 self.ui_raycast = constants.UI_RAYCAST_EMPTY
+                self.cursor = constants.CURSOR_IDLE_UI
+            if hovering_slot:
+                self.cursor = constants.CURSOR_HOVER
             if self.open_interface is not None:
-                self.open_interface.render(
+                slot = self.open_interface.render(
                     self.b, pygame.Rect(cont.x + cont.w / 2, cont.y, cont.w / 2, cont.h)
                 )
+                if slot is not None:
+                    hovering_slot = slot
+                    self.cursor = constants.CURSOR_HOVER
+                    if self.open_interface == self.crafting_interface:
+                        crafting_slot = True
             if hovering_slot is not None:
                 if hovering_slot.empty:
                     if hovering_slot.filter:
@@ -197,7 +232,7 @@ class WorldUI:
                 else:
                     self.ui_raycast = UIRaycastHit(
                         hovering_slot.item,
-                        self.open_interface is self.crafting_interface,
+                        crafting_slot,
                         hovering_slot.amount,
                         constants.RAYCAST_UI_ITEM,
                         hovering_slot.filter,
@@ -218,14 +253,24 @@ class WorldUI:
                 None,
                 render_bg=False,
             )
+        pygame.mouse.set_cursor(self.cursor)
 
     def can_interact_world(self):
         return not self.inventory_open or self.ui_raycast is None
 
-    def toggle_inventory(self):
+    def toggle_inventory(self, manual=False):
         if not self.inventory_open:
             self.open_interface = self.crafting_interface
+            god.player.building_preview = None
         else:
+            if manual:
+                building = None
+                if self.inventory.floating_slot.source_slot is not None:
+                    if self.inventory.floating_slot.item is not None:
+                        building = self.inventory.floating_slot.item.building
+                if building is not None:
+                    god.player.building_preview = building
+                    god.player.building_available = constants.BUILDING_STATUS_OBSTRUCTED
             self.open_interface = None
             self.inventory.floating_slot = FloatingSlot(None, 0)
         self.inventory_open = not self.inventory_open

@@ -85,6 +85,8 @@ class ObjectData:
             value = getattr(self, name)
             if isinstance(value, type):
                 continue
+            if isinstance(value, ObjectData):
+                value = repr(value)
             res += f"\t{name}".ljust(longest) + f": {value}\n"
         res += ")"
         return res
@@ -95,7 +97,7 @@ class ObjectData:
     def __eq__(self, other: typing.Self):
         if not isinstance(other, ObjectData):
             return False
-        return self.uid == other.uid
+        return self.uid == other.uid and self.type_name == other.type_name
 
     def setup(self): ...
 
@@ -161,7 +163,7 @@ class ObjectData:
 
 class TileOD(ObjectData, type_name="Tile"):
     item_drop: list[tuple["ItemOD", int]]
-    break_requirements_id: str
+    break_requirements: str
     break_time_s: float
 
     def post_setup(self):
@@ -169,6 +171,8 @@ class TileOD(ObjectData, type_name="Tile"):
         for name_id, amount in self.item_drop:
             drop.append((ItemOD.get(name_id), amount))
         self.item_drop = drop
+        if self.break_requirements is not None:
+            self.break_requirements = ItemOD.get(self.break_requirements)
 
 
 @dataclass
@@ -228,7 +232,96 @@ class ItemOD(ObjectData, type_name="Item"):
             self.dropped_by = TileOD.get(self.dropped_by)
 
 
-class BuildingOD(ObjectData, type_name="Building"): ...
+@dataclass
+class LightData:
+    radius: float
+    intensity: int
+    color: str | list[int]
+
+
+@dataclass
+class BuildingStateData:
+    default: bool
+    default_image: bool
+    name: str
+    image_name: str
+    light: LightData | None
+
+
+class BuildingOD(ObjectData, type_name="Building"):
+    DEFAULTS = {
+        "restore_tile": None,
+        "break_requirements": "pickaxe",
+        "break_time_s": 2,
+        "static": True,
+        "description": "",
+        "display_name": "",
+        "floor_whitelist": None,
+        "floor": False,
+        "air": False,
+        "replace_tile": False,
+        "interface": True,
+        "need_energy": True,
+        "altitude_range": None,
+        "states": None,
+    }
+
+    size: tuple[int, int]
+    need_energy: bool
+    air: bool
+    floor: bool
+    static: bool
+    replace_tile: bool
+    interface: bool
+    break_time_s: float
+    altitude_range: tuple[int, int] | None
+    floor_whitelist: list["TileOD|BuildingOD"]
+    restore_tile: TileOD | None
+    break_requirements: ItemOD
+    states: dict[str, BuildingStateData]
+
+    @property
+    def item(self):
+        return ItemOD.get(self.name_id)
+
+    def post_setup(self):
+        if self.restore_tile is not None:
+            self.restore_tile = TileOD.get(self.restore_tile)
+        if self.floor_whitelist is None:
+            self.floor_whitelist = []
+        if self.states is None:
+            self.states = {"": {"default": True, "default_image": True}}
+        floor = []
+        for name in self.floor_whitelist:
+            if TileOD.exists(name):
+                floor.append(TileOD.get(name))
+            else:
+                floor.append(BuildingOD.get(name))
+        self.floor_whitelist = floor
+        states = {}
+        for state_name, state_data in self.states.items():
+            light = state_data.get("light", None)
+            default = state_data.get("default", False)
+            default_image = state_data.get("default_image", False)
+            image_name = self.name_id
+            if not default_image:
+                image_name = f"{image_name}_{state_name}"
+            state = BuildingStateData(
+                default,
+                default_image,
+                state_name,
+                image_name,
+                LightData(light["radius"], light["intensity"], light["color"])
+                if light
+                else None,
+            )
+            states[state_name] = state
+            if default:
+                states["default"] = state
+        self.states = states
+        self.break_requirements = ItemOD.get(self.break_requirements)
+        self.description = self.item.description
+        self.display_name = self.item.display_name
 
 
 class VegetationOD(ObjectData, type_name="Vegetation"): ...
@@ -262,6 +355,7 @@ class Dust(ObjectSingleton):
 def load_all(objects_folder: str):
     with open(os.path.join(objects_folder, "_registry_.json"), "r") as reg_file:
         registry = json.load(reg_file)
+    object_datas: list[ObjectData] = []
     for folder in os.listdir(objects_folder):
         if folder.startswith("_registry_") or folder.startswith("_singletons_"):
             continue
@@ -290,7 +384,6 @@ def load_all(objects_folder: str):
             else:
                 free_id = max(registry[type_name].values()) + 1
         data_type: type[ObjectData] = ObjectData._registered_types_[type_name]
-        object_datas: list[ObjectData] = []
         for cur_dir, _, files in os.walk(subdir_path):
             for file_name in files:
                 if file_name.startswith("_type_"):
@@ -307,8 +400,8 @@ def load_all(objects_folder: str):
                     data_dict["data_type"] = data_type
                 od = data_type(data_dict)
                 object_datas.append(od)
-        for od in object_datas:
-            od.post_setup()
+    for od in object_datas:
+        od.post_setup()
     for singleton_file in os.listdir(os.path.join(objects_folder, "_singletons_")):
         with open(
             os.path.join(objects_folder, "_singletons_", singleton_file), "r"

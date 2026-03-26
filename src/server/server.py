@@ -7,6 +7,7 @@ from src import mailbox
 from src import constants
 from src import object_data
 from src.server import god
+from src.object_data import BuildingOD
 from src.server.world import World
 from src.server.connection import (
     SocketClientConnection,
@@ -116,6 +117,25 @@ class Server:
                 player = self.world.players[mail.client_id]
                 player.inventory.client_action(
                     mail.action, mail.source, mail.dest, mail.amount
+                )
+        elif mail.type == mailbox.MAIL_CRAFT_REQUEST:
+            if mail.client_id in self.world.players:
+                player = self.world.players[mail.client_id]
+                player.try_craft_item(mail.item)
+        elif mail.type == mailbox.MAIL_BUILDING_AVAILABLE:
+            if mail.client_id in self.world.players:
+                player = self.world.players[mail.client_id]
+                available = self.world.can_place_building(
+                    BuildingOD.get(mail.building_uid), pygame.Vector2(mail.pos), player
+                )
+                player.client.conn.mail(
+                    mailbox.MAIL_BUILDING_AVAILABLE, available=available
+                )
+        elif mail.type == mailbox.MAIL_PLACE_BUILDING:
+            if mail.client_id in self.world.players:
+                player = self.world.players[mail.client_id]
+                self.world.place_building(
+                    BuildingOD.get(mail.building_uid), pygame.Vector2(mail.pos), player
                 )
 
     def force_disconnect(self, client: ClientInterface, timeout=False):

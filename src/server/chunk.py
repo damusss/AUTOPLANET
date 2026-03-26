@@ -2,6 +2,7 @@ import random
 
 import pygame
 
+from src import shared
 from src import constants
 from src.server import god
 from src.server import terrain
@@ -13,13 +14,13 @@ class Chunk:
     def __init__(self, chunk_key, chunk_pos):
         self.chunk_key = chunk_key
         self.chunk_pos = pygame.Vector2(chunk_pos)
-        self.world_topleft = pygame.Vector2(
-            self.chunk_pos.x * constants.CHUNK_SIZE - constants.CHUNK_SIZE / 2,
-            self.chunk_pos.y * constants.CHUNK_SIZE - constants.CHUNK_SIZE / 2,
-        )
+        self.world_topleft = shared.get_chunk_world_pos(self.chunk_pos)
         self.world_rect = pygame.FRect(
             self.world_topleft, (constants.CHUNK_SIZE, constants.CHUNK_SIZE)
         )
+        self.building_ids = set()
+        self.building_floor_hitboxes: list[pygame.FRect] = []
+        self.building_ids_table: dict[tuple[int, int], str] = {}
         self.drops: list[Drop] = []
         self.loaded_client_players = []
         self.tile_hitboxes: list[pygame.FRect] = []
@@ -158,6 +159,9 @@ class Chunk:
     def get_tile(self, tile_pos):
         return self.tiles_mat[tile_pos[1] * constants.CHUNK_SIZE + tile_pos[0]]
 
+    def get_tile_index(self, tile_pos):
+        return tile_pos[1] * constants.CHUNK_SIZE + tile_pos[0]
+
     def get_client_data(self):
         return {
             "key": self.chunk_key,
@@ -166,4 +170,9 @@ class Chunk:
             "big_star": self.big_star,
             "tiles": self.tiles_mat,
             "lights": self.lights,
+            "buildings": [
+                god.world.buildings[bid].get_client_data()
+                for bid in self.building_ids
+                if bid in god.world.buildings
+            ],
         }

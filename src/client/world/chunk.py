@@ -2,9 +2,10 @@ import threading
 
 import pygame
 
+from src import shared
 from src import constants
 from src.client import god
-from src.object_data import BigStar, BlackHole, TileOD
+from src.object_data import BigStar, BlackHole, TileOD, BuildingOD
 from src.client.rendering import (
     MeshRenderingLayer,
     TextureRenderingLayer,
@@ -49,6 +50,31 @@ class LightData:
         self.color = color
 
 
+class BuildingDataHolder:
+    def __init__(self, data):
+        self.data = data
+
+    @property
+    def id(self) -> str:
+        return self.data[0]
+
+    @property
+    def building_od(self) -> BuildingOD:
+        return BuildingOD.get(self.data[1])
+
+    @property
+    def topleft_x(self) -> int:
+        return self.data[2]
+
+    @property
+    def topleft_y(self) -> int:
+        return self.data[3]
+
+    @property
+    def state(self) -> str:
+        return self.data[4]
+
+
 class Chunk:
     def __init__(self, data):
         self.loaded = True
@@ -56,14 +82,12 @@ class Chunk:
         self.chunk_pos = pygame.Vector2(
             [float(val) for val in self.chunk_key.split(";")]
         )
-        self.world_topleft = pygame.Vector2(
-            self.chunk_pos.x * constants.CHUNK_SIZE - constants.CHUNK_SIZE / 2,
-            self.chunk_pos.y * constants.CHUNK_SIZE - constants.CHUNK_SIZE / 2,
-        )
+        self.world_topleft = shared.get_chunk_world_pos(self.chunk_pos)
         self.world_rect = pygame.FRect(
             self.world_topleft, (constants.CHUNK_SIZE, constants.CHUNK_SIZE)
         )
 
+        self.static_buildings = [BuildingDataHolder(bd) for bd in data["buildings"]]
         self.lights = []
         for light in data["lights"]:
             self.lights.append(
@@ -74,6 +98,20 @@ class Chunk:
                     light[4],
                 )
             )
+        for bdata in self.static_buildings:
+            state = bdata.building_od.states[bdata.state]
+            if state.light is not None:
+                self.lights.append(
+                    LightData(
+                        (
+                            bdata.topleft_x + bdata.building_od.size[0] / 2,
+                            bdata.topleft_y + bdata.building_od.size[1] / 2,
+                        ),
+                        state.light.radius,
+                        state.light.intensity,
+                        state.light.color,
+                    )
+                )
 
         self.stars = data["stars"]
         self.dusts = data["dusts"]
@@ -82,6 +120,7 @@ class Chunk:
 
         self.tile_hitboxes = {}
         self.tiles_texture: Texture = None
+        self.static_buildings_texture: Texture = None
 
         self.layers: dict[str, TextureRenderingLayer] = {}
         thread = threading.Thread(target=self.render_static)
@@ -209,6 +248,24 @@ class Chunk:
                 self.tiles_texture, self.world_rect, None
             )
 
+    def render_static_buildings(self):
+        padding = constants.BUILDING_MAX_SIZE - 1
+        surf_w = (constants.CHUNK_SIZE + (padding) * 2) * constants.TILE_PX
+        surface = pygame.Surface((surf_w, surf_w), pygame.SRCALPHA)
+        for bdata in self.static_buildings:
+            image = god.assets.buildings[bdata.building_od.states[bdata.state].image_name]
+            rel_x = bdata.topleft_x - self.world_topleft.x + padding
+            rel_y = bdata.topleft_y - self.world_topleft.y + padding
+            surface.blit(image, (rel_x * constants.TILE_PX, rel_y * constants.TILE_PX))
+        self.static_buildings_texture = Texture.from_surface(
+            god.windowing.renderer, surface
+        )
+        self.layers["static_buildings"] = TextureRenderingLayer(
+            self.static_buildings_texture,
+            self.world_rect.inflate(padding * 2, padding * 2),
+            None,
+        )
+
     def render_static(self):
         if len(self.stars) > 0 and "stars" not in self.layers:
             self.render_stars()
@@ -217,8 +274,11 @@ class Chunk:
         if self.big_star is not None and "big_star" not in self.layers:
             self.render_big_star()
         self.render_tiles()
+        if len(self.static_buildings) > 0:
+            self.render_static_buildings()
 
     def unload(self):
         self.loaded = False
         self.tiles_texture = None
+        self.static_buildings_texture = None
         self.layers.clear()

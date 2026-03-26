@@ -1,5 +1,3 @@
-import pygame
-
 from src import constants
 from src.shared import Slot
 from src.object_data import ItemOD
@@ -12,27 +10,22 @@ class Inventory:
             Slot(None, 0, None, i)
             for i in range(constants.INVENTORY_COLS * constants.INVENTORY_ROWS + 1)
         ]
-        hand = self.slots[constants.INVENTORY_HAND_I]
-        hand.item = ItemOD.get("pickaxe")
-        hand.amount = 1
-        hand.filter = [constants.INVENTORY_FILTER_CATEGORY, "tools"]
+        self.slots[constants.INVENTORY_HAND_I].set(
+            ItemOD.get("pickaxe"), 1, [constants.INVENTORY_FILTER_CATEGORY, ["tools"]]
+        )
+        # temp testing
+        self.add(ItemOD.objects.bricks_platform, 10)
+        self.add(ItemOD.objects.furnace, 5)
+
+    def has(self, item: ItemOD, amount):
+        return self.count(item) >= amount
 
     def count(self, item: ItemOD):
         count = 0
         for slot in self.slots:
             if slot.item == item:
-                count += 1
+                count += slot.amount
         return count
-
-    def has_recipe(self, recipe: list[tuple[ItemOD, int]]):
-        for item, amount in recipe:
-            if self.count(item) < amount:
-                return False
-        return True
-
-    def remove_recipe(self, recipe: list[tuple[ItemOD, int]]):
-        for item, amount in recipe:
-            self.remove(item, amount)
 
     def remove(self, item: ItemOD, amount):
         to_remove = amount

@@ -3,5 +3,6 @@
     "description": "",
     "smelt_result": "ammonia",
     "create_data": null,
-    "dropped_by": "ammonia_deposit"
+    "dropped_by": "ammonia_deposit",
+    "category": "smeltables"
 }

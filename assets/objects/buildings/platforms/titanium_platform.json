@@ -1,0 +1,7 @@
+{
+    "size": [1, 1],
+    "need_energy": false,
+    "floor": true,
+    "replace_tile": true,
+    "interface": false
+}

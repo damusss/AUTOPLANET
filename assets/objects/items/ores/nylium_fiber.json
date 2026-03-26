@@ -3,5 +3,6 @@
     "description": "Dropped by nylium grass",
     "smelt_result": "plastic",
     "create_data": null,
+    "category": "smeltables",
     "droppped_by": "nylium"
 }

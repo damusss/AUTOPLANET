@@ -3,13 +3,7 @@ import pygame
 from src import shared
 from src import constants
 from src.client import god
-from src.object_data import ItemOD
 from src.client.ui.panel import render_panel
-
-if constants.NEW_RENDER:
-    from pygame._render import Texture, Renderer
-else:
-    from pygame._sdl2 import Texture, Renderer
 
 
 class FloatingSlot:
@@ -29,6 +23,7 @@ class FloatingSlot:
 class InventoryInterface:
     def __init__(self):
         self.floating_slot = FloatingSlot(None, 0)
+        self.slot_size = 0
 
     def render(self, b):
         self.b = b
@@ -51,6 +46,7 @@ class InventoryInterface:
         slot_size = (
             cont.w / 2 - pad * 2 - slot_b * (constants.INVENTORY_COLS - 1)
         ) / constants.INVENTORY_COLS
+        self.slot_size = slot_size
         slot_i = 0
         hovering_slot = None
         for i in range(constants.INVENTORY_ROWS):
@@ -101,12 +97,17 @@ class InventoryInterface:
         self,
         rect: pygame.Rect,
         slot: "shared.Slot",
-        hovering_slot,
+        hovering_slot=None,
         empty_icon=None,
         render_bg=True,
         ghost=False,
+        outline_color="white",
+        storage=True,
+        can_hover=True,
+        amount_at_two=False,
+        image_percentage=1,
     ):
-        hovering = rect.collidepoint(god.input.mouse_screen) and render_bg
+        hovering = rect.collidepoint(god.input.mouse_screen) and render_bg and can_hover
         if render_bg:
             render_panel(
                 rect,
@@ -115,6 +116,7 @@ class InventoryInterface:
                 outline_alpha=constants.UI_PANEL_OUTLINE_HOVER_ALPHA
                 if hovering
                 else constants.UI_PANEL_OUTLINE_ALPHA,
+                outline_color=outline_color,
             )
         if not slot.empty or empty_icon is not None:
             img_h = rect.w * constants.UI_SLOT_IMAGE_SIZE_MULT
@@ -127,28 +129,46 @@ class InventoryInterface:
                 img.alpha = int(constants.UI_PANEL_OUTLINE_ALPHA / 4)
             elif ghost:
                 img.alpha = constants.UI_SLOT_GHOST_ALPHA
+            img_rect = pygame.Rect(0, 0, img_h, img_h).move_to(
+                center=(
+                    rect.centerx,
+                    rect.centery
+                    - (
+                        rect.w
+                        * constants.UI_SLOT_IMAGE_OFFSET_Y_MULT
+                        * (
+                            not slot.empty
+                            and slot.item.stack_size > 1
+                            and storage
+                            and not amount_at_two
+                        )
+                    ),
+                )
+            )
             img.draw(
                 None,
-                pygame.Rect(0, 0, img_h, img_h).move_to(
-                    center=(
-                        rect.centerx,
-                        rect.centery
-                        - (
-                            rect.w
-                            * constants.UI_SLOT_IMAGE_OFFSET_Y_MULT
-                            * (
-                                # not ghost and
-                                not slot.empty and slot.item.stack_size > 1
-                            )
-                        ),
-                    )
-                ),
+                img_rect,
             )
             if slot.empty:
                 img.alpha = 255
             elif ghost:
                 img.alpha = 255
-            if not slot.empty and slot.item.stack_size > 1:  # and not ghost
+            if image_percentage != 1:
+                god.assets.white_tex.color = "black"
+                god.assets.white_tex.alpha = constants.UI_SLOT_PROGRESS_ALPHA
+                god.assets.white_tex.draw(
+                    None,
+                    pygame.Rect(
+                        img_rect.topleft,
+                        (img_rect.w, img_rect.h * (1 - image_percentage)),
+                    ),
+                )
+            if (
+                not slot.empty
+                and slot.item.stack_size > 1
+                and storage
+                and (not amount_at_two or slot.amount > 1)
+            ):  # and not ghost
                 amount_h = rect.w * constants.UI_SLOT_AMOUNT_H_MULT
                 amount_tex, amount_rect = god.assets.font.get_texture_and_rect(
                     slot.amount, "white", amount_h

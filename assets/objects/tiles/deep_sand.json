@@ -2,6 +2,6 @@
     "display_name": "Deep Sand",
     "description": "",
     "item_drop": [["deep_sand", 2]],
-    "break_requirements_id": null,
+    "break_requirements": null,
     "break_time_s": 0.5
 }

@@ -3,5 +3,6 @@
     "description": "",
     "create_data": null,
     "smelt_result": "glass",
+    "category": "smelter_smeltables",
     "dropped_by": "deep_sand"
 }

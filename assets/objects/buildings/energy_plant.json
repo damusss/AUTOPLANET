@@ -1,0 +1,6 @@
+{
+    "size": [2, 2],
+    "need_energy": false,
+    "floor_whitelist": ["nylium_surface"],
+    "interface": false
+}

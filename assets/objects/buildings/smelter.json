@@ -1,0 +1,4 @@
+{
+    "size": [2, 2],
+    "floor_whitelist": ["iron_platform", "titanium_platform"]
+}

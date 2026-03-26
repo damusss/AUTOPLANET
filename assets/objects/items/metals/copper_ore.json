@@ -3,6 +3,7 @@
     "description": "Dropped by a copper ore tile",
     "stack_size": "default",
     "smelt_result": "copper",
+    "category": "smeltables",
     "create_data": null,
     "dropped_by": "copper_ore"
 }

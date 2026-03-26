@@ -4,7 +4,7 @@ import pygame
 
 from src import constants
 from src.client import god
-from src.object_data import TileOD, ItemOD
+from src.object_data import TileOD, ItemOD, BuildingOD
 
 if constants.NEW_RENDER:
     from pygame._render import Texture
@@ -76,6 +76,8 @@ class Assets:
             (constants.TILE_PX, constants.TILE_PX), pygame.SRCALPHA
         )
         self.tile_not_solid_overlay.fill(constants.TILE_NOT_SOLID_COLOR_MULT)
+        self.placeholder = self.load("placeholder.png")
+        self.placeholder_tex = self.load_tex(self.placeholder)
 
         self.load_particles()
         self.load_big_stars()
@@ -85,6 +87,8 @@ class Assets:
         self.load_tiles()
         self.load_items()
         self.load_icons()
+        self.load_buildings()
+        self.load_building_previews()
 
     def load_world_ui(self):
         self.raycast_tex = self.load_tex("ui/raycast.png")
@@ -95,6 +99,8 @@ class Assets:
         for i in range(len(os.listdir("assets/images/ui/break_animation"))):
             surf = self.load(f"ui/break_animation/{i}.png")
             surf.fill("black", special_flags=pygame.BLEND_RGB_MULT)
+            mask = pygame.mask.from_surface(surf)
+            surf = mask.to_surface(None, setcolor="white", unsetcolor=(0, 0, 0, 0))
             self.break_anim_texs.append(self.load_tex(surf))
 
     def load_ui(self):
@@ -144,9 +150,44 @@ class Assets:
                 self.tile_texs[tile] = self.load_tex(surf)
             except FileNotFoundError:
                 print(f"Missing image {f'tiles/{tile}.png'}")
-                surf = self.load("placeholder.png")
-                self.tiles[tile] = surf
-                self.tile_texs[tile] = self.load_tex(surf)
+                self.tile_texs[tile] = self.placeholder_tex
+
+    def load_buildings(self):
+        self.buildings = {}
+        self.building_texs = {}
+        for building in BuildingOD.get_list():
+            try:
+                surf = self.load(f"items/{building.name_id}.png")
+                self.buildings[building.name_id] = surf
+                self.building_texs[building.name_id] = self.load_tex(surf)
+            except FileNotFoundError:
+                self.buildings[building.name_id] = pygame.transform.scale(
+                    self.placeholder,
+                    (
+                        building.size[0] * constants.TILE_PX,
+                        building.size[1] * constants.TILE_PX,
+                    ),
+                )
+                self.building_texs[building.name_id] = self.placeholder_tex
+            for state in building.states.values():
+                if state.default_image:
+                    continue
+                try:
+                    surf = self.load(f"items/stages/{state.image_name}.png")
+                    self.buildings[state.image_name] = surf
+                    self.building_texs[state.image_name] = self.load_tex(surf)
+                except FileNotFoundError:
+                    print(
+                        f"Missing building state image 'items/stages/{state.image_name}.png'"
+                    )
+                    self.buildings[state.image_name] = pygame.transform.scale(
+                        self.placeholder,
+                        (
+                            building.size[0] * constants.TILE_PX,
+                            building.size[1] * constants.TILE_PX,
+                        ),
+                    )
+                    self.building_texs[state.image_name] = self.placeholder_tex
 
     def load_items(self):
         self.item_texs = {}
@@ -155,7 +196,17 @@ class Assets:
                 self.item_texs[item] = self.load_tex(f"items/{item}.png")
             except FileNotFoundError:
                 print(f"Missing image {f'items/{item}.png'}")
-                self.item_texs[item] = self.load_tex("placeholder.png")
+                self.item_texs[item] = self.placeholder_tex
+
+    def load_building_previews(self):
+        self.building_preview_texs = {}
+        for building in BuildingOD.get_all().keys():
+            try:
+                surf = self.load(f"items/{building}.png")
+                surf = pygame.transform.grayscale(surf)
+                self.building_preview_texs[building] = self.load_tex(surf)
+            except FileNotFoundError:
+                self.building_preview_texs[building] = self.placeholder_tex
 
     def load_icons(self):
         self.icons_texs = {}

@@ -54,7 +54,7 @@ class Drop:
     def collisions(self, chunks: list["Chunk"], hitbox):
         prev_y = hitbox.y
         for chunk in chunks:
-            for rect in chunk.tile_hitboxes:
+            for rect in chunk.tile_hitboxes + chunk.building_floor_hitboxes:
                 if rect.colliderect(hitbox):
                     if hitbox.bottom < rect.centery and hitbox.bottom > rect.top:
                         hitbox.bottom = rect.top

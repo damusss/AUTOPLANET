@@ -1,0 +1,14 @@
+{
+    "size": [2,2],
+    "states": {
+        "on": {
+            "default_image": true,
+            "light": {
+                "radius": 5,
+                "intensity": 180,
+                "color": "#ff7b00"
+            }
+        },
+        "off": {"default": true}
+    }
+}

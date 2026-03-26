@@ -4,6 +4,6 @@
     "create_data": {
         "type": "hands",
         "time_s": 1,
-        "recipe": [["deep_ore", 3]]
+        "recipe": [["deep_ore", 2]]
     }
 }

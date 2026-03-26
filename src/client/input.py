@@ -27,19 +27,33 @@ class Input:
             if god.ui.inventory_open:
                 god.ui.mouse_clicked(event)
             if god.ui.can_interact_world():
-                god.client.conn.mail(
-                    mailbox.MAIL_INPUT_EVENT, input_type=event.type, button=event.button
-                )
+                if (
+                    god.player.building_preview is not None
+                    and event.button == pygame.BUTTON_LEFT
+                ):
+                    god.client.conn.mail(
+                        mailbox.MAIL_PLACE_BUILDING,
+                        building_uid=god.player.building_preview.uid,
+                        pos=tuple(self.mouse_world),
+                    )
+                else:
+                    god.client.conn.mail(
+                        mailbox.MAIL_INPUT_EVENT,
+                        input_type=event.type,
+                        button=event.button,
+                    )
         if event.type in [pygame.KEYDOWN, pygame.KEYUP]:
             if False:
                 god.client.conn.mail(mailbox.MAIL_INPUT_EVENT, input_type=event.type)
         if event.type == pygame.KEYUP:
             if event.key == pygame.K_e:
-                god.ui.toggle_inventory()
+                god.ui.toggle_inventory(True)
             if event.key == pygame.K_ESCAPE:
+                god.player.building_preview = None
                 if god.ui.inventory_open:
                     god.ui.toggle_inventory()
             if event.key == pygame.K_q:
+                god.player.building_preview = None
                 if god.ui.inventory_open:
                     god.ui.inventory.floating_slot.source_slot = None
 

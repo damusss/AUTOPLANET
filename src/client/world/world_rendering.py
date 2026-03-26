@@ -2,6 +2,7 @@ import typing
 
 import pygame
 
+from src import shared
 from src import constants
 from src.client import god
 from src.client.ui import ui
@@ -52,7 +53,7 @@ class WorldRendering:
         for player in players:
             self.render_player(player)
         self.render_world_ui()
-        self.render_overlay_ui()
+        self.ui.render()
         if self.debug:
             self.render_debug()
 
@@ -123,47 +124,69 @@ class WorldRendering:
             god.camera.to_screen(topright_point),
         )
 
+    def render_raycast(self):
+        if god.player.break_start_time is not None:
+            percent = (pygame.time.get_ticks() - god.player.break_start_time) / (
+                god.player.raycast.object_data.break_time_s * 1000
+            )
+            frame = int(percent * len(god.assets.break_anim_texs))
+            if frame >= len(god.assets.break_anim_texs):
+                frame = len(god.assets.break_anim_texs) - 1
+            image = god.assets.break_anim_texs[frame]
+            image.color = "black"
+            if god.player.raycast.type == constants.RAYCAST_BUILDING:
+                image.color = (30, 30, 30, 255)
+            image.draw(
+                None,
+                god.camera.rect_to_screen(
+                    pygame.FRect(0, 0, 1, 1).move_to(
+                        center=god.player.raycast.hitbox.center
+                    )
+                ),
+            )
+
+        if god.ui.can_interact_world():
+            color = constants.HOVERING_TILE_COLOR
+            distance = god.player.pos.distance_to(god.player.raycast.hitbox.center)
+            if distance > constants.PLAYER_REACH_RADIUS or not (
+                god.player.raycast.object_data.break_requirements is None
+                or god.player.inventory_slots[constants.INVENTORY_HAND_I].contains(
+                    god.player.raycast.object_data.break_requirements,
+                    1,
+                )
+            ):
+                color = constants.HOVERING_TILE_UNAVAILABLE_COLOR
+            god.assets.raycast_corner_tex.color = color
+            box = god.player.raycast.hitbox
+            for rect, fx, fy in (
+                ((box.x, box.y, 1, 1), False, False),
+                ((box.right - 1, box.y, 1, 1), True, False),
+                ((box.x, box.bottom - 1, 1, 1), False, True),
+                ((box.right - 1, box.bottom - 1, 1, 1), True, True),
+            ):
+                god.assets.raycast_corner_tex.draw(
+                    None, god.camera.rect_to_screen(rect), flip_x=fx, flip_y=fy
+                )
+
+    def render_building_preview(self):
+        topleft = shared.get_building_topleft(
+            god.input.mouse_world, god.player.building_preview.size
+        )
+        rect = pygame.FRect(topleft, god.player.building_preview.size)
+        tex = god.assets.building_preview_texs[god.player.building_preview.name_id]
+        tex.color = (
+            constants.GREEN_GOOD
+            if god.player.building_available == constants.BUILDING_STATUS_AVAILABLE
+            else constants.RED_BAD
+        )
+        tex.alpha = constants.BUILDING_PREVIEW_ALPHA
+        tex.draw(None, god.camera.rect_to_screen(rect))
+
     def render_world_ui(self):
-        if god.player.raycast is not None:
-            if god.player.break_start_time is not None:
-                percent = (pygame.time.get_ticks() - god.player.break_start_time) / (
-                    god.player.raycast.object_data.break_time_s * 1000
-                )
-                frame = int(percent * len(god.assets.break_anim_texs))
-                if frame >= len(god.assets.break_anim_texs):
-                    frame = len(god.assets.break_anim_texs) - 1
-                god.assets.break_anim_texs[frame].draw(
-                    None, god.camera.rect_to_screen(god.player.raycast.hitbox)
-                )
-
-            if god.ui.can_interact_world():
-                color = constants.HOVERING_TILE_COLOR
-                distance = god.player.pos.distance_to(god.player.raycast.hitbox.center)
-                if distance > constants.PLAYER_REACH_RADIUS or not (
-                    god.player.raycast.object_data.break_requirements_id is None
-                    or god.player.inventory_slots[constants.INVENTORY_HAND_I].contains(
-                        ItemOD.get(
-                            god.player.raycast.object_data.break_requirements_id
-                        ),
-                        1,
-                    )
-                ):
-                    color = constants.HOVERING_TILE_UNAVAILABLE_COLOR
-                god.assets.raycast_corner_tex.color = color
-                box = god.player.raycast.hitbox
-                for rect, fx, fy in (
-                    ((box.x, box.y, 1, 1), False, False),
-                    ((box.right - 1, box.y, 1, 1), True, False),
-                    ((box.x, box.bottom - 1, 1, 1), False, True),
-                    ((box.right - 1, box.bottom - 1, 1, 1), True, True),
-                ):
-                    god.assets.raycast_corner_tex.draw(
-                        None, god.camera.rect_to_screen(rect), flip_x=fx, flip_y=fy
-                    )
-
-    def render_overlay_ui(self):
-        self.ui.render()
-        # ui.render_panel(self.renderer.get_viewport().inflate(-800, -400), 40, 2, outline_alpha=150)
+        if god.player.raycast is not None and god.player.building_preview is None:
+            self.render_raycast()
+        if god.player.building_preview is not None:
+            self.render_building_preview()
 
     def render_debug(self):
         self.renderer.draw_color = constants.DEBUG_PLAYER_HITBOX_COL
@@ -212,7 +235,7 @@ class WorldRendering:
     def render_chunks(self):
         for chunk in god.world.loaded_chunks.values():
             for name, layer in chunk.layers.items():
-                if name == "tiles":
+                if name in ["tiles", "static_buildings"]:
                     continue
                 layer.render(self.renderer)
 
@@ -223,6 +246,8 @@ class WorldRendering:
         for chunk in god.world.loaded_chunks.values():
             if "tiles" in chunk.layers:
                 chunk.layers["tiles"].render(self.renderer)
+            if "static_buildings" in chunk.layers:
+                chunk.layers["static_buildings"].render(self.renderer)
         self.render_drops()
 
         self.light_overlay_texture.draw(None, self.lit_texture_layer.get_rect())

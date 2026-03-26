@@ -2,6 +2,7 @@
     "display_name": "Iron Ore",
     "description": "Dropped by an iron ore tile",
     "smelt_result": "iron",
+    "category": "smeltables",
     "create_data": null,
     "dropped_by": "iron_ore"
 }

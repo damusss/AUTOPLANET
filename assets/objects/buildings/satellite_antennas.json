@@ -1,0 +1,5 @@
+{
+    "size": [2, 2],
+    "floor_whitelist": ["copper_platform"],
+    "altitude_range": [-30, 2]
+}

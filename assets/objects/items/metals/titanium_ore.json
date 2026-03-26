@@ -2,6 +2,7 @@
     "display_name": "Titanium Ore",
     "description": "",
     "smelt_result": "titanium",
+    "category": "smelter_smeltables",
     "create_data": null,
-    "dropped_by": "deep_titanium_ore"
+    "dropped_by": "titanium_ore"
 }

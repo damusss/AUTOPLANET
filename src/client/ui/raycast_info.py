@@ -5,7 +5,7 @@ import pygame
 from src import shared
 from src import constants
 from src.client import god
-from src.object_data import ItemOD
+from src.object_data import ItemOD, TileOD, BuildingOD
 from src.client.ui.panel import render_panel_bg
 
 if typing.TYPE_CHECKING:
@@ -18,18 +18,18 @@ class RaycastInfoUI:
         raycast = god.player.raycast
         if god.ui.inventory_open and god.ui.ui_raycast is not None:
             raycast = god.ui.ui_raycast
+        col_w = god.windowing.width * constants.UI_RAYCAST_INFO_W_MULT
+        cs = col_w * constants.UI_RAYCAST_INFO_CORNER_SIZE_MULT
         if (
             raycast is None
             or raycast is constants.UI_RAYCAST_EMPTY
             or raycast.type == constants.RAYCAST_EMPTY
         ):
+            self.try_render_building_status(0, col_w, cs)
             return
-        col_w = god.windowing.width * constants.UI_RAYCAST_INFO_W_MULT
-        cs = col_w * constants.UI_RAYCAST_INFO_CORNER_SIZE_MULT
+        bottom = self.try_render_building_status(0, col_w, cs)
         if raycast.object_data is not None:
-            bottom = self.render_main(raycast, col_w, cs, self.b, self.b * 2)
-        else:
-            bottom = 0
+            bottom = self.render_main(bottom, raycast, col_w, cs, self.b, self.b * 2)
         if raycast.type == constants.RAYCAST_TILE:
             if len(raycast.object_data.item_drop) > 0:
                 bottom = self.render_drops(
@@ -38,25 +38,55 @@ class RaycastInfoUI:
             bottom = self.render_tile_pos(
                 bottom, raycast, col_w, cs, self.b, self.b * 2
             )
+        elif raycast.type == constants.RAYCAST_BUILDING:
+            bottom = self.render_tile_pos(
+                bottom, raycast, col_w, cs, self.b, self.b * 2
+            )
         elif raycast.type == constants.RAYCAST_UI_ITEM:
             if raycast.filter:
                 bottom = self.render_slot_filter(
                     bottom, raycast, col_w, cs, self.b, self.b * 2
                 )
-            bottom = self.render_item_amount(
-                bottom, raycast, col_w, cs, self.b, self.b * 2
-            )
+            if raycast.crafting:
+                if raycast.item.create_data is not None:
+                    bottom = self.render_item_recipe(
+                        bottom, raycast, col_w, cs, self.b, self.b * 2
+                    )
+                    if raycast.item.create_data.type != constants.CREATE_HANDS:
+                        bottom = self.render_item_create_in(
+                            bottom, raycast, col_w, cs, self.b, self.b * 2
+                        )
+            else:
+                bottom = self.render_item_amount(
+                    bottom, raycast, col_w, cs, self.b, self.b * 2
+                )
+            building = raycast.item.building
+            if building is not None:
+                if len(building.floor_whitelist) > 0:
+                    bottom = self.render_building_floor_whitelist(
+                        bottom, building, col_w, cs, self.b, self.b * 2
+                    )
         elif raycast.type == constants.RAYCAST_UI_SLOT_FILTER:
             bottom = self.render_slot_filter(
                 bottom, raycast, col_w, cs, self.b, self.b * 2
             )
+
+    def try_render_building_status(self, top, col_w, cs):
+        if god.player.building_preview is not None:
+            if len(god.player.building_preview.floor_whitelist) > 0:
+                top = self.render_building_floor_whitelist(
+                    top, god.player.building_preview, col_w, cs, self.b, self.b * 2
+                )
+            if god.player.building_available != constants.BUILDING_STATUS_AVAILABLE:
+                top = self.render_building_status(top, col_w, cs, self.b, self.b * 2)
+        return top
 
     def render_slot_filter(self, top, raycast: "UIRaycastHit", col_w, cs, bb, b):
         content_w = col_w - b * 2
         title_h = content_w * (constants.UI_RAYCAST_INFO_MSG_H_MULT)
         text = "Unknown Filter"
         if raycast.filter[0] == constants.INVENTORY_FILTER_CATEGORY:
-            text = f"Slot Whitelist: {constants.ITEM_CATEGORY_NAMES[raycast.filter[1]]}"
+            text = f"Slot Whitelist: {', '.join([constants.ITEM_CATEGORY_NAMES[cat] for cat in raycast.filter[1]])}"
         title_tex, title_rect = god.assets.font.get_texture_and_rect(
             text, "white", title_h, content_w
         )
@@ -67,86 +97,119 @@ class RaycastInfoUI:
         title_tex.draw(None, title_rect.move_to(center=box.center))
         return box.bottom
 
-    def render_drops(self, top, raycast: shared.RaycastHit, col_w, cs, bb, b):
+    def render_item_recipe(self, top, raycast: "UIRaycastHit", col_w, cs, bb, b):
         content_w = col_w - b * 2
         subtitle_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        item_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        item_name_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
         subtitle_tex, subtitle_rect = god.assets.font.get_texture_and_rect(
-            "Drops", "white", subtitle_h
+            "Recipe", "white", subtitle_h
         )
-        drop_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
-
         box = pygame.Rect(
             god.windowing.width - bb - col_w,
             top + bb,
             col_w,
-            bb * 3
-            + subtitle_rect.h
-            + bb * (len(raycast.object_data.item_drop) - 1)
-            + drop_h * len(raycast.object_data.item_drop)
-            + (subtitle_rect.h + bb * 3 + drop_h)
-            * (raycast.object_data.break_requirements_id is not None),
+            bb + subtitle_rect.h + b,
         )
-        render_panel_bg(box, cs)
+
         subtitle_rect = subtitle_rect.move_to(midtop=(box.centerx, box.top + bb))
-        subtitle_tex.draw(None, subtitle_rect)
+        to_draw = [(subtitle_tex, subtitle_rect, None)]
 
-        for i, (item_od, amount) in enumerate(raycast.object_data.item_drop):
-            drop_name_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
-            amount_str = f"({amount}) " if amount > 1 else ""
-            drop_tex, drop_rect = god.assets.font.get_texture_and_rect(
-                f"{amount_str}{item_od.display_name}",
+        for item_od, amount in raycast.item.create_data.recipe:
+            item_count = god.player.count_item(item_od)
+            if item_count >= amount:
+                amount_col = constants.GREEN_GOOD
+            else:
+                status = shared.craft_availability_status(
+                    item_od, god.player.count_item, amount - item_count
+                )
+                if status.availability in [
+                    constants.CRAFT_READY,
+                    constants.CRAFT_READY_SUBSTEP,
+                ]:
+                    amount_col = constants.CRAFTING_SLOT_COLORS[
+                        constants.CRAFT_READY_SUBSTEP
+                    ]
+                elif status.availability == constants.CRAFT_UNAVAILABLE:
+                    amount_col = constants.RED_BAD
+                elif status.availability == constants.CRAFT_NOT_READY:
+                    amount_col = constants.CRAFTING_SLOT_COLORS[
+                        constants.CRAFT_NOT_READY
+                    ]
+            amount_txt = f"{item_count}/{amount}"
+            amount_tex, amount_rect = god.assets.font.get_texture_and_rect(
+                amount_txt, amount_col, item_name_h
+            )
+            name_tex, name_rect = god.assets.font.get_texture_and_rect(
+                item_od.display_name,
                 "white",
-                drop_name_h,
+                item_name_h,
+                content_w - item_h - amount_rect.w,
             )
-            drop_rect = drop_rect.move_to(
-                center=(
-                    box.x + b + (content_w - drop_h) / 2,
-                    subtitle_rect.bottom + bb + (drop_h + bb) * i + (drop_h / 2),
-                )
-            )
-            drop_tex.draw(None, drop_rect)
-            drop_rect = pygame.Rect(0, 0, drop_h, drop_h).move_to(
-                topright=(
-                    box.right - b,
-                    subtitle_rect.bottom + bb + (drop_h + bb) * i,
-                )
-            )
-            god.assets.item_texs[item_od.name_id].draw(
-                None,
-                drop_rect,
-            )
-        if raycast.object_data.break_requirements_id is not None:
-            req_tex, req_rect = god.assets.font.get_texture_and_rect(
-                "Requires", constants.UI_RAYCAST_INFO_DESCR_COL, subtitle_h
-            )
-            req_rect = req_rect.move_to(midtop=(box.centerx, drop_rect.bottom + bb))
-            req_tex.draw(None, req_rect)
-            item = ItemOD.get(raycast.object_data.break_requirements_id)
-            item_tex, item_rect = god.assets.font.get_texture_and_rect(
-                item.display_name,
-                constants.GREEN_GOOD
-                if god.player.inventory_slots[constants.INVENTORY_HAND_I].contains(
-                    item, 1
-                )
-                else constants.RED_BAD,
-                drop_name_h,
-            )
-            item_tex.draw(
-                None,
-                item_rect.move_to(
-                    center=(
-                        box.x + b + (content_w - drop_h) / 2,
-                        req_rect.bottom + bb + drop_h / 2,
-                    )
-                ),
-            )
-            god.assets.item_texs[item.name_id].draw(
-                None,
-                pygame.Rect(0, 0, drop_h, drop_h).move_to(
-                    topright=(box.right - b, req_rect.bottom + bb)
-                ),
+            row_rect = pygame.Rect(
+                box.left + b, box.bottom, content_w, max(item_h, name_rect.h)
             )
 
+            image_tex = god.assets.item_texs[item_od.name_id]
+            to_draw.append(
+                (
+                    image_tex,
+                    pygame.Rect(0, 0, item_h, item_h).move_to(
+                        midright=row_rect.midright
+                    ),
+                    None,
+                )
+            )
+            to_draw.append(
+                (amount_tex, amount_rect.move_to(midleft=row_rect.midleft), amount_col)
+            )
+            to_draw.append((name_tex, name_rect.move_to(center=row_rect.center), None))
+            box.h += row_rect.h + b
+
+        render_panel_bg(box, cs)
+        for img, rect, col in to_draw:
+            if col:
+                img.color = col
+            img.draw(None, rect)
+
+        return box.bottom
+
+    def render_item_create_in(self, top, raycast: "UIRaycastHit", col_w, cs, bb, b):
+        content_w = col_w - b * 2
+        subtitle_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        item_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        item_name_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
+        subtitle_tex, subtitle_rect = god.assets.font.get_texture_and_rect(
+            "Create In", "white", subtitle_h
+        )
+        box = pygame.Rect(god.windowing.width - col_w - bb, top + bb, col_w, bb)
+        to_draw = []
+        subtitle_rect = subtitle_rect.move_to(midtop=box.midbottom)
+        box.h += subtitle_rect.h + b
+        to_draw.append((subtitle_tex, subtitle_rect))
+        building_item_od = ItemOD.get(raycast.item.create_data.type)
+        name_tex, name_rect = god.assets.font.get_texture_and_rect(
+            building_item_od.display_name, "white", item_name_h
+        )
+        image_tex = god.assets.item_texs[building_item_od.name_id]
+        to_draw.append(
+            (
+                image_tex,
+                pygame.Rect(0, 0, item_h, item_h).move_to(
+                    topright=(box.right - b, box.bottom)
+                ),
+            )
+        )
+        to_draw.append(
+            (
+                name_tex,
+                name_rect.move_to(center=(box.centerx, box.bottom + item_h / 2)),
+            )
+        )
+        box.h += item_h + b
+        render_panel_bg(box, cs)
+        for img, rect in to_draw:
+            img.draw(None, rect)
         return box.bottom
 
     def render_item_amount(self, top, raycast: "UIRaycastHit", col_w, cs, bb, b):
@@ -173,6 +236,163 @@ class RaycastInfoUI:
         )
         return box.bottom
 
+    def render_building_status(self, top, col_w, cs, bb, b):
+        content_w = col_w - b * 2
+        title_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        status_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
+        title_tex, title_rect = god.assets.font.get_texture_and_rect(
+            "Building Status", "white", title_h, content_w
+        )
+        status = constants.BUILDING_STATUS_MESSAGES[god.player.building_available]
+        if god.player.building_available == constants.BUILDING_STATUS_WRONG_ALTITUDE:
+            status = status.replace(
+                "<r1>", god.player.building_preview.altitude_range[0]
+            ).replace("<r2>", god.player.building_preview.altitude_range[1])
+        status_tex, status_rect = god.assets.font.get_texture_and_rect(
+            status, constants.RED_BAD, status_h, content_w
+        )
+        box = pygame.Rect(
+            god.windowing.width - col_w - bb,
+            top + bb,
+            col_w,
+            bb + title_rect.h + b * 2 + status_rect.h,
+        )
+        render_panel_bg(box, cs)
+        title_rect = title_rect.move_to(midtop=(box.centerx, box.top + bb))
+        title_tex.draw(None, title_rect)
+        status_tex.draw(
+            None, status_rect.move_to(midtop=(box.centerx, title_rect.bottom + b))
+        )
+        return box.bottom
+
+    def render_building_floor_whitelist(
+        self, top, building_od: BuildingOD, col_w, cs, bb, b
+    ):
+        content_w = col_w - b * 2
+        subtitle_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        subtitle_tex, subtitle_rect = god.assets.font.get_texture_and_rect(
+            "Place On", "white", subtitle_h
+        )
+        floor_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        floor_name_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
+        box = pygame.Rect(
+            god.windowing.width - bb - col_w, top + bb, col_w, bb + subtitle_rect.h
+        )
+        subtitle_rect = subtitle_rect.move_to(midbottom=box.midbottom)
+        box.h += b
+        to_draw = [(subtitle_tex, subtitle_rect)]
+        for floor_od in building_od.floor_whitelist:
+            floor_tex, floor_rect = god.assets.font.get_texture_and_rect(
+                floor_od.display_name, "white", floor_name_h, content_w - floor_h
+            )
+            img = (
+                god.assets.tile_texs
+                if isinstance(floor_od, TileOD)
+                else god.assets.item_texs
+            )[floor_od.name_id]
+            h = max(floor_rect.h, floor_h)
+            box.h += h
+            to_draw.append(
+                (
+                    floor_tex,
+                    floor_rect.move_to(center=(box.centerx, box.bottom - h / 2)),
+                )
+            )
+            to_draw.append(
+                (
+                    img,
+                    pygame.Rect(0, 0, floor_h, floor_h).move_to(
+                        midright=(box.right - b, box.bottom - h / 2)
+                    ),
+                )
+            )
+            box.h += b
+        render_panel_bg(box, cs)
+        for tex, rect in to_draw:
+            tex.draw(None, rect)
+        return box.bottom
+
+    def render_drops(self, top, raycast: shared.RaycastHit, col_w, cs, bb, b):
+        content_w = col_w - b * 2
+        subtitle_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        subtitle_tex, subtitle_rect = god.assets.font.get_texture_and_rect(
+            "Drops", "white", subtitle_h
+        )
+        drop_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        drop_name_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
+
+        box = pygame.Rect(
+            god.windowing.width - bb - col_w,
+            top + bb,
+            col_w,
+            bb * 3
+            + subtitle_rect.h
+            + bb * (len(raycast.object_data.item_drop) - 1)
+            + drop_h * len(raycast.object_data.item_drop)
+            + (subtitle_rect.h + bb * 3 + drop_h)
+            * (raycast.object_data.break_requirements is not None),
+        )
+        render_panel_bg(box, cs)
+        subtitle_rect = subtitle_rect.move_to(midtop=(box.centerx, box.top + bb))
+        subtitle_tex.draw(None, subtitle_rect)
+
+        for i, (item_od, amount) in enumerate(raycast.object_data.item_drop):
+            amount_str = f"({amount}) " if amount > 1 else ""
+            drop_tex, drop_rect = god.assets.font.get_texture_and_rect(
+                f"{amount_str}{item_od.display_name}",
+                "white",
+                drop_name_h,
+            )
+            drop_rect = drop_rect.move_to(
+                center=(
+                    box.x + b + (content_w - drop_h) / 2,
+                    subtitle_rect.bottom + bb + (drop_h + bb) * i + (drop_h / 2),
+                )
+            )
+            drop_tex.draw(None, drop_rect)
+            drop_rect = pygame.Rect(0, 0, drop_h, drop_h).move_to(
+                topright=(
+                    box.right - b,
+                    subtitle_rect.bottom + bb + (drop_h + bb) * i,
+                )
+            )
+            god.assets.item_texs[item_od.name_id].draw(
+                None,
+                drop_rect,
+            )
+        if raycast.object_data.break_requirements is not None:
+            req_tex, req_rect = god.assets.font.get_texture_and_rect(
+                "Requires", constants.UI_RAYCAST_INFO_DESCR_COL, subtitle_h
+            )
+            req_rect = req_rect.move_to(midtop=(box.centerx, drop_rect.bottom + bb))
+            req_tex.draw(None, req_rect)
+            item_tex, item_rect = god.assets.font.get_texture_and_rect(
+                raycast.object_data.break_requirements.display_name,
+                constants.GREEN_GOOD
+                if god.player.inventory_slots[constants.INVENTORY_HAND_I].contains(
+                    raycast.object_data.break_requirements, 1
+                )
+                else constants.RED_BAD,
+                drop_name_h,
+            )
+            item_tex.draw(
+                None,
+                item_rect.move_to(
+                    center=(
+                        box.x + b + (content_w - drop_h) / 2,
+                        req_rect.bottom + bb + drop_h / 2,
+                    )
+                ),
+            )
+            god.assets.item_texs[raycast.object_data.break_requirements.name_id].draw(
+                None,
+                pygame.Rect(0, 0, drop_h, drop_h).move_to(
+                    topright=(box.right - b, req_rect.bottom + bb)
+                ),
+            )
+
+        return box.bottom
+
     def render_tile_pos(self, top, raycast: shared.RaycastHit, col_w, cs, bb, b):
         too_far = (
             god.player.pos.distance_to(raycast.hitbox.center)
@@ -181,9 +401,10 @@ class RaycastInfoUI:
         content_w = col_w - b * 2
         split = raycast.chunk_key.split(";")
         cpos = (int(split[0]), int(split[1]))
+        world_pos = shared.get_chunk_world_pos(cpos)
         text_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
         text_tex, text_rect = god.assets.font.get_texture_and_rect(
-            f"X: {cpos[0] * constants.CHUNK_SIZE + raycast.tile_pos[0]} Y: {cpos[1] * constants.CHUNK_SIZE + raycast.tile_pos[1]}",
+            f"X: {int(world_pos.x + raycast.tile_pos[0])} Y: {int(world_pos.y + raycast.tile_pos[1])}",
             constants.UI_RAYCAST_INFO_DESCR_COL,
             text_h,
         )
@@ -210,7 +431,7 @@ class RaycastInfoUI:
         )
         return box.bottom
 
-    def render_main(self, raycast: shared.RaycastHit, col_w, cs, bb, b):
+    def render_main(self, bottom, raycast: shared.RaycastHit, col_w, cs, bb, b):
         content_w = col_w - b * 2
         title_h = content_w * constants.UI_RAYCAST_INFO_TITLE_H_MULT
         title_tex, title_rect = god.assets.font.get_texture_and_rect(
@@ -228,7 +449,7 @@ class RaycastInfoUI:
         box = pygame.Rect(
             (
                 god.windowing.width - bb - col_w,
-                bb,
+                bb + bottom,
                 col_w,
                 b * 4 + title_rect.h + image_w + descr_rect.h,
             )
@@ -242,6 +463,10 @@ class RaycastInfoUI:
             object_tex = god.assets.tile_texs[raycast.object_data.name_id]
         elif raycast.type == constants.RAYCAST_UI_ITEM:
             object_tex = god.assets.item_texs[raycast.object_data.name_id]
+        elif raycast.type == constants.RAYCAST_BUILDING:
+            object_tex = god.assets.building_texs[
+                raycast.object_data.states[raycast.building_data[1]].image_name
+            ]
         image_rect = pygame.Rect(
             box.x + b + (content_w / 2 - image_w / 2),
             title_rect.bottom + b,

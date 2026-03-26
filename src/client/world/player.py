@@ -4,7 +4,7 @@ from src import shared
 from src import mailbox
 from src import constants
 from src.client import god
-from src.object_data import ItemOD
+from src.object_data import ItemOD, BuildingOD
 from src.client.world.chunk import LightData
 
 if constants.NEW_RENDER:
@@ -65,6 +65,9 @@ class Player(PlayerLike):
         self.health = constants.PLAYER_MAX_HEALTH
         self.raycast: shared.RaycastHit = None
         self.break_start_time = None
+        self.building_preview: BuildingOD | None = None
+        self.building_available = constants.BUILDING_STATUS_OBSTRUCTED
+        self.craft_queue: list[shared.CraftQueueItem] = []
         self.inventory_slots = [
             shared.Slot(None, 0, None, i)
             for i in range(constants.INVENTORY_COLS * constants.INVENTORY_ROWS + 1)
@@ -145,3 +148,11 @@ class Player(PlayerLike):
                 frame_kind="run" if self.running else "idle",
                 frame_index=self.frame_index,
             )
+        if self.building_preview is not None:
+            god.client.conn.mail(
+                mailbox.MAIL_BUILDING_AVAILABLE,
+                building_uid=self.building_preview.uid,
+                pos=tuple(god.input.mouse_world),
+            )
+            if self.count_item(self.building_preview.item) < 1:
+                self.building_preview = None

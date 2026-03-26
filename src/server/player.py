@@ -25,6 +25,7 @@ class Player:
         self.energy = constants.PLAYER_MAX_ENERGY
         self.raycast: shared.RaycastHit = None
         self.inventory = Inventory()
+        self.craft_queue: deque[shared.CraftQueueItem] = deque()
 
         self.break_start_time = None
         self.break_data: shared.RaycastHit = None
@@ -48,6 +49,27 @@ class Player:
             constants.PLAYER_HITBOX,
         )
 
+    def add_to_craft_queue(self, item, amount, phantom):
+        for craft_item in self.craft_queue:
+            if craft_item.item == item and craft_item.phantom == phantom:
+                craft_item.amount += amount
+                return
+        self.craft_queue.append(shared.CraftQueueItem(item, amount, phantom))
+
+    def try_craft_item(self, item_uid):
+        item = ItemOD.get(item_uid)
+        status = shared.craft_availability_status(item, self.inventory.count)
+        if status.availability not in [
+            constants.CRAFT_READY,
+            constants.CRAFT_READY_SUBSTEP,
+        ]:
+            return
+        for item_uid, amount in status.counted_items.items():
+            self.inventory.remove(ItemOD.get(item_uid), amount)
+        for item_od, amount in status.intermediate_queue:
+            self.add_to_craft_queue(item_od, amount, True)
+        self.add_to_craft_queue(item, 1, False)
+
     def frame(self, rects, drops_data):
         self.input_dir.x = pygame.math.lerp(
             self.input_dir.x, self.client_input_dir.x, god.dt * 10, True
@@ -62,9 +84,14 @@ class Player:
                 prev_dir != self.input_dir.y
                 and abs(prev_dir) < constants.ZERO
                 and (
-                    (ground := god.world.raycast((self.pos.x, self.pos.y + 0.8)))
+                    (
+                        ground := god.world.raycast(
+                            (self.pos.x, self.pos.y + 0.8),
+                            constants.RAYCASTFLAG_COLLIDER,
+                        )
+                    )
                     is not None
-                    and ground.type == constants.RAYCAST_TILE
+                    and ground.hitbox is not None
                 )
             ):
                 jump_mult = 12
@@ -92,9 +119,30 @@ class Player:
         self.collisions_y(rects)
 
         self.handle_mouse_input()
+        self.handle_craft_queue()
+
         self.mail_physics(drops_data)
         if self.inventory.dirty:
             self.mail_stats()
+
+    def handle_craft_queue(self):
+        if len(self.craft_queue) <= 0:
+            return
+        craft_item = self.craft_queue[0]
+        if craft_item.start_time is None:
+            craft_item.start_time = pygame.time.get_ticks()
+        if (
+            pygame.time.get_ticks() - craft_item.start_time
+            >= craft_item.item.create_data.time_s * 1000
+        ):
+            if not craft_item.phantom:
+                left = self.inventory.add(craft_item.item, 1)
+                if left > 0:
+                    god.world.drop(self.pos, craft_item.item, 1)
+            craft_item.amount -= 1
+            craft_item.start_time = pygame.time.get_ticks()
+            if craft_item.amount <= 0:
+                self.craft_queue.popleft()
 
     def mail_physics(self, drops_data):
         other_player_stats = {}
@@ -118,6 +166,7 @@ class Player:
             else None,
             other_players=other_player_stats,
             drops=drops_data,
+            craft_queue=[item.get_client_data() for item in self.craft_queue],
         )
 
     def mail_stats(self):
@@ -151,13 +200,16 @@ class Player:
                 and self.raycast is not None
                 and self.raycast.type != constants.RAYCAST_EMPTY
             ):
-                if self.pos.distance_to(
-                    self.raycast.hitbox.center
-                ) <= constants.PLAYER_REACH_RADIUS and (
-                    self.raycast.object_data.break_requirements_id is None
-                    or self.inventory.slots[constants.INVENTORY_HAND_I].contains(
-                        ItemOD.get(self.raycast.object_data.break_requirements_id), 1
+                if (
+                    self.pos.distance_to(self.raycast.hitbox.center)
+                    <= constants.PLAYER_REACH_RADIUS
+                    and (
+                        self.raycast.object_data.break_requirements is None
+                        or self.inventory.slots[constants.INVENTORY_HAND_I].contains(
+                            self.raycast.object_data.break_requirements, 1
+                        )
                     )
+                    and self.raycast.object_data.break_time_s > 0
                 ):
                     self.break_data = self.raycast
                     self.break_start_time = pygame.time.get_ticks()

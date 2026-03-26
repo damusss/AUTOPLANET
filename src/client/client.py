@@ -67,6 +67,10 @@ class Client:
                 else None
             )
             self.world.drops_data = mail.drops
+            self.world.player.craft_queue = [
+                shared.CraftQueueItem.from_client_data(data)
+                for data in mail.craft_queue
+            ]
 
             for other_player_id, other_player_data in mail.other_players.items():
                 other_player_id = int(other_player_id)
@@ -94,6 +98,8 @@ class Client:
             if time == "now":
                 time = pygame.time.get_ticks()
             self.world.player.break_start_time = time
+        elif mail.type == mailbox.MAIL_BUILDING_AVAILABLE:
+            self.world.player.building_available = mail.available
 
     def disconnect(self):
         self.mailbox.queue.clear()
