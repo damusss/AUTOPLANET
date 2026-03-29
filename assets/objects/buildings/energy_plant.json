@@ -2,5 +2,20 @@
     "size": [2, 2],
     "need_energy": false,
     "floor_whitelist": ["nylium_surface"],
-    "interface": false
+    "interface": false,
+    "energy_radius": 16,
+    "energy_endpoint_type": "plant",
+    "states": {
+        "on": {
+            "default_image": true,
+            "light": {
+                "radius": 6,
+                "intensity": 160,
+                "color": "#00CCFF"
+            }
+        },
+        "off": {
+            "default": true
+        }
+    }
 }

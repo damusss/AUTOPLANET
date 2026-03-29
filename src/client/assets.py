@@ -89,6 +89,7 @@ class Assets:
         self.load_icons()
         self.load_buildings()
         self.load_building_previews()
+        self.load_energy_debug()
 
     def load_world_ui(self):
         self.raycast_tex = self.load_tex("ui/raycast.png")
@@ -173,12 +174,12 @@ class Assets:
                 if state.default_image:
                     continue
                 try:
-                    surf = self.load(f"items/stages/{state.image_name}.png")
+                    surf = self.load(f"items/states/{state.image_name}.png")
                     self.buildings[state.image_name] = surf
                     self.building_texs[state.image_name] = self.load_tex(surf)
                 except FileNotFoundError:
                     print(
-                        f"Missing building state image 'items/stages/{state.image_name}.png'"
+                        f"Missing building state image 'items/states/{state.image_name}.png'"
                     )
                     self.buildings[state.image_name] = pygame.transform.scale(
                         self.placeholder,
@@ -191,9 +192,14 @@ class Assets:
 
     def load_items(self):
         self.item_texs = {}
+        self.drop_inflate_percentages = {}
         for item in ItemOD.get_all().keys():
             try:
-                self.item_texs[item] = self.load_tex(f"items/{item}.png")
+                surf = self.load(f"items/{item}.png")
+                self.item_texs[item] = self.load_tex(surf)
+                mask = pygame.mask.from_surface(surf)
+                bounding = mask.get_bounding_rects()[0]
+                self.drop_inflate_percentages[item] = surf.height / bounding.h
             except FileNotFoundError:
                 print(f"Missing image {f'items/{item}.png'}")
                 self.item_texs[item] = self.placeholder_tex
@@ -211,8 +217,33 @@ class Assets:
     def load_icons(self):
         self.icons_texs = {}
         for file in os.listdir("assets/images/icons"):
-            name = file.split(".")[0]
-            self.icons_texs[name] = self.load_tex(f"icons/{file}")
+            name, ext = file.split(".")
+            if ext == "svg":
+                surf = pygame.image.load_sized_svg(
+                    f"assets/images/icons/{file}",
+                    (constants.ICON_SVG_SIZE, constants.ICON_SVG_SIZE),
+                )
+                self.icons_texs[name] = self.load_tex(surf)
+            else:
+                self.icons_texs[name] = self.load_tex(f"icons/{file}")
+
+    def load_energy_debug(self):
+        plant_r = BuildingOD.objects.energy_plant.energy_radius
+        transmitter_r = BuildingOD.objects.energy_transmitter.energy_radius
+        plant_surf = pygame.Surface((plant_r * 2, plant_r * 2), pygame.SRCALPHA)
+        transmitter_surf = pygame.Surface(
+            (transmitter_r * 2, transmitter_r * 2), pygame.SRCALPHA
+        )
+        pygame.draw.circle(plant_surf, "white", (plant_r, plant_r), plant_r)
+        pygame.draw.circle(
+            transmitter_surf, "white", (transmitter_r, transmitter_r), transmitter_r
+        )
+        self.energy_plant_debug_tex = self.load_tex(plant_surf)
+        self.energy_transmitter_debug_tex = self.load_tex(transmitter_surf)
+
+        self.energy_plant_debug_tex.color = self.energy_transmitter_debug_tex.color = (
+            constants.ENERGY_DEBUG_COLOR
+        )
 
     def load_tex(self, surf_or_file):
         if isinstance(surf_or_file, pygame.Surface):

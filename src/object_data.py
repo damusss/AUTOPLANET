@@ -99,6 +99,9 @@ class ObjectData:
             return False
         return self.uid == other.uid and self.type_name == other.type_name
 
+    def __hash__(self):
+        return hash(self.uid)
+
     def setup(self): ...
 
     def post_setup(self): ...
@@ -203,7 +206,7 @@ class ItemOD(ObjectData, type_name="Item"):
 
     def setup(self):
         if self.description == "":
-            self.description = "NOTIMPLEMENTED"
+            self.description = "NOT IMPLEMENTED"
         if self.stack_size == "default":
             self.stack_size = constants.DEFAULT_STACK_SIZE
         elif self.stack_size == "default_building":
@@ -219,13 +222,12 @@ class ItemOD(ObjectData, type_name="Item"):
             )
 
     def post_setup(self):
-        if self.create_data is None:
-            return
-        recipe = self.create_data.recipe
-        recipe_od = []
-        for name_id, amount in recipe:
-            recipe_od.append((ItemOD.get(name_id), amount))
-        self.create_data.recipe = recipe_od
+        if self.create_data is not None:
+            recipe = self.create_data.recipe
+            recipe_od = []
+            for name_id, amount in recipe:
+                recipe_od.append((ItemOD.get(name_id), amount))
+            self.create_data.recipe = recipe_od
         if self.smelt_result is not None:
             self.smelt_result = ItemOD.get(self.smelt_result)
         if self.dropped_by is not None:
@@ -264,6 +266,8 @@ class BuildingOD(ObjectData, type_name="Building"):
         "need_energy": True,
         "altitude_range": None,
         "states": None,
+        "energy_radius": 0,
+        "energy_endpoint_type": "machine",
     }
 
     size: tuple[int, int]
@@ -274,11 +278,13 @@ class BuildingOD(ObjectData, type_name="Building"):
     replace_tile: bool
     interface: bool
     break_time_s: float
+    energy_radius: float
     altitude_range: tuple[int, int] | None
-    floor_whitelist: list["TileOD|BuildingOD"]
+    floor_whitelist: list["TileOD | BuildingOD"]
     restore_tile: TileOD | None
     break_requirements: ItemOD
     states: dict[str, BuildingStateData]
+    energy_endpoint_type: str
 
     @property
     def item(self):
@@ -303,6 +309,8 @@ class BuildingOD(ObjectData, type_name="Building"):
             light = state_data.get("light", None)
             default = state_data.get("default", False)
             default_image = state_data.get("default_image", False)
+            if len(self.states) == 1:
+                default = default_image = True
             image_name = self.name_id
             if not default_image:
                 image_name = f"{image_name}_{state_name}"

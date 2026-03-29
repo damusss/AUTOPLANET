@@ -4,7 +4,6 @@ from collections import deque
 import pygame
 
 from src import shared
-from src import mailbox
 from src import constants
 from src.server import god
 from src.server import terrain
@@ -13,6 +12,7 @@ from src.server.inventory import Inventory
 
 if typing.TYPE_CHECKING:
     from src.server.server import ClientInterface
+    from src.server.building import Building
 
 
 class Player:
@@ -24,9 +24,8 @@ class Player:
         self.health = constants.PLAYER_MAX_HEALTH
         self.energy = constants.PLAYER_MAX_ENERGY
         self.raycast: shared.RaycastHit = None
-        self.inventory = Inventory()
+        self.inventory = Inventory(self)
         self.craft_queue: deque[shared.CraftQueueItem] = deque()
-
         self.break_start_time = None
         self.break_data: shared.RaycastHit = None
 
@@ -37,6 +36,7 @@ class Player:
         self.client_chunks_queue = deque()
         self.client_mouse_pos = pygame.Vector2()
         self.client_mouse_pressing = False
+        self.client_subscribed_building: "Building" = None
 
     @property
     def hitbox(self):
@@ -150,14 +150,14 @@ class Player:
             if player is self:
                 continue
             other_player_stats[player.client.id] = {
-                "pos": (round(p, constants.DIGIT_PRECISION) for p in tuple(player.pos)),
-                "vel": (round(p, constants.DIGIT_PRECISION) for p in tuple(player.vel)),
+                "pos": [round(p, constants.DIGIT_PRECISION) for p in tuple(player.pos)],
+                "vel": [round(p, constants.DIGIT_PRECISION) for p in tuple(player.vel)],
                 "frame_kind": player.client_frame_kind,
                 "frame_index": player.client_frame_index,
             }
 
         self.client.conn.mail(
-            mailbox.MAIL_PLAYER_PHYSICS,
+            constants.MAIL_PLAYER_PHYSICS,
             pos=tuple(self.pos),
             vel=tuple(self.vel),
             energy=self.energy,
@@ -171,7 +171,7 @@ class Player:
 
     def mail_stats(self):
         self.client.conn.mail(
-            mailbox.MAIL_PLAYER_STATS,
+            constants.MAIL_PLAYER_STATS,
             health=self.health,
             inventory=self.inventory.get_client_data(),
         )
@@ -186,14 +186,14 @@ class Player:
                 or self.break_data.hitbox != self.raycast.hitbox
             ):
                 self.break_data = None
-                self.client.conn.mail(mailbox.MAIL_BREAK_START, time=None)
+                self.client.conn.mail(constants.MAIL_BREAK_START, time=None)
             else:
                 if (
                     pygame.time.get_ticks() - self.break_start_time
                     >= self.break_data.object_data.break_time_s * 1000
                 ):
                     god.world.break_raycast(self.break_data)
-                    self.client.conn.mail(mailbox.MAIL_BREAK_START, time=None)
+                    self.client.conn.mail(constants.MAIL_BREAK_START, time=None)
         else:
             if (
                 self.client_mouse_pressing
@@ -213,7 +213,7 @@ class Player:
                 ):
                     self.break_data = self.raycast
                     self.break_start_time = pygame.time.get_ticks()
-                    self.client.conn.mail(mailbox.MAIL_BREAK_START, time="now")
+                    self.client.conn.mail(constants.MAIL_BREAK_START, time="now")
 
     def collisions_x(self, rects: list[pygame.FRect]):
         prev_hitbox = self.hitbox

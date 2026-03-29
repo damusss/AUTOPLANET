@@ -1,7 +1,6 @@
 import pygame
 
 from src import shared
-from src import mailbox
 from src import constants
 from src.client import god
 from src.object_data import ItemOD
@@ -14,6 +13,9 @@ class CraftingInterface:
         self.category_hitboxes = {}
         self.item_hitboxes = {}
 
+    def get_slots(self):
+        return []
+
     def mouse_clicked(self, event: pygame.Event):
         for cat, hitbox in self.category_hitboxes.items():
             if hitbox.collidepoint(event.pos):
@@ -21,7 +23,7 @@ class CraftingInterface:
         for item, hitbox in self.item_hitboxes.items():
             if hitbox.collidepoint(event.pos):
                 item_od = ItemOD.get(item)
-                god.client.conn.mail(mailbox.MAIL_CRAFT_REQUEST, item=item_od.uid)
+                god.client.conn.mail(constants.MAIL_CRAFT_REQUEST, item=item_od.uid)
 
     def render(self, b, cont: pygame.Rect):
         self.b = b

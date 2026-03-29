@@ -5,7 +5,6 @@ from queue import Queue
 import pygame
 
 from src import shared
-from src import mailbox
 from src import constants
 from src import object_data
 from src.client import god
@@ -41,9 +40,9 @@ class Client:
         self.state = state
         self.state.enter()
 
-    def handle_mail(self, mail: mailbox.Mail):
+    def handle_mail(self, mail: shared.Mail):
         self.last_mail = pygame.time.get_ticks()
-        if mail.type == mailbox.MAIL_CONNECTION_ACCEPTED:
+        if mail.type == constants.MAIL_CONNECTION_ACCEPTED:
             self.conn.connection_accepted(mail)
             self.enter_state(self.world)
             print(
@@ -51,13 +50,13 @@ class Client:
             )
             for player in mail.other_players:
                 self.world.other_player_connect(player[0], player[1], player[2])
-        elif mail.type == mailbox.MAIL_FORCE_DISCONNECT:
+        elif mail.type == constants.MAIL_FORCE_DISCONNECT:
             self.conn.force_disconnected()
             self.enter_state(self.main_menu)
             print(
                 f"[C:/{self.id}] Kicked from server 'local' (client name={self.name})"
             )
-        elif mail.type == mailbox.MAIL_PLAYER_PHYSICS:
+        elif mail.type == constants.MAIL_PLAYER_PHYSICS:
             self.world.player.pos = pygame.Vector2(mail.pos)
             self.world.player.vel = pygame.Vector2(mail.vel)
             self.world.player.energy = mail.energy
@@ -82,24 +81,28 @@ class Client:
                 other_player.frame_kind = other_player_data["frame_kind"]
                 other_player.frame_index = other_player_data["frame_index"]
 
-        elif mail.type == mailbox.MAIL_PLAYER_STATS:
+        elif mail.type == constants.MAIL_PLAYER_STATS:
             self.world.player.health = mail.health
             self.world.player.update_inventory(mail.inventory)
-        elif mail.type == mailbox.MAIL_CHUNK_LOAD:
+        elif mail.type == constants.MAIL_CHUNK_LOAD:
             self.world.load_chunks(mail.chunks, mail.refresh)
-        elif mail.type == mailbox.MAIL_CHUNK_UNLOAD:
+        elif mail.type == constants.MAIL_CHUNK_UNLOAD:
             self.world.unload_chunks(mail.chunk_keys)
-        elif mail.type == mailbox.MAIL_OTHER_PLAYER_CONNECT:
+        elif mail.type == constants.MAIL_OTHER_PLAYER_CONNECT:
             self.world.other_player_connect(mail.player_id, mail.pos, mail.name)
-        elif mail.type == mailbox.MAIL_OTHER_PLAYER_DISCONNECT:
+        elif mail.type == constants.MAIL_OTHER_PLAYER_DISCONNECT:
             self.world.other_player_disconnect(mail.player_id)
-        elif mail.type == mailbox.MAIL_BREAK_START:
+        elif mail.type == constants.MAIL_BREAK_START:
             time = mail.time
             if time == "now":
                 time = pygame.time.get_ticks()
             self.world.player.break_start_time = time
-        elif mail.type == mailbox.MAIL_BUILDING_AVAILABLE:
+        elif mail.type == constants.MAIL_BUILDING_AVAILABLE:
             self.world.player.building_available = mail.available
+        elif mail.type == constants.MAIL_BUILDING_INTERACT:
+            self.world.rendering.ui.refresh_building_interact(
+                mail.base_data, mail.building_data
+            )
 
     def disconnect(self):
         self.mailbox.queue.clear()
@@ -111,7 +114,7 @@ class Client:
         self.abort = True
         self.disconnect()
         if constants.OFFLINE_LOCALHOST:
-            self.conn.mail(mailbox.MAIL_ABORT)
+            self.conn.mail(constants.MAIL_ABORT)
         print(
             f"[C:/{self.id}] Disconnected from server 'local' (client name={self.name})"
         )

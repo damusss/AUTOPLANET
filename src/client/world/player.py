@@ -1,7 +1,6 @@
 import pygame
 
 from src import shared
-from src import mailbox
 from src import constants
 from src.client import god
 from src.object_data import ItemOD, BuildingOD
@@ -69,7 +68,7 @@ class Player(PlayerLike):
         self.building_available = constants.BUILDING_STATUS_OBSTRUCTED
         self.craft_queue: list[shared.CraftQueueItem] = []
         self.inventory_slots = [
-            shared.Slot(None, 0, None, i)
+            shared.Slot(None, 0, None, i, "player")
             for i in range(constants.INVENTORY_COLS * constants.INVENTORY_ROWS + 1)
         ]
         for slot in self.inventory_slots:
@@ -91,6 +90,20 @@ class Player(PlayerLike):
             + constants.PLAYER_HITBOX_OFFSET,
             constants.PLAYER_HITBOX,
         )
+
+    def set_building_preview(self, preview):
+        if preview is None:
+            self.building_preview = None
+            god.rendering.energy_debug = False
+        else:
+            self.building_preview = preview
+            self.building_available = constants.BUILDING_STATUS_OBSTRUCTED
+            if (
+                self.building_preview.need_energy
+                or self.building_preview.energy_endpoint_type
+                != constants.ENDPOINT_MACHINE
+            ):
+                god.rendering.energy_debug = True
 
     def count_item(self, item):
         count = 0
@@ -144,15 +157,15 @@ class Player(PlayerLike):
 
         if cur_frame != self.frame_index:
             god.client.conn.mail(
-                mailbox.MAIL_ANIMATION_UPDATE,
+                constants.MAIL_ANIMATION_UPDATE,
                 frame_kind="run" if self.running else "idle",
                 frame_index=self.frame_index,
             )
         if self.building_preview is not None:
             god.client.conn.mail(
-                mailbox.MAIL_BUILDING_AVAILABLE,
+                constants.MAIL_BUILDING_AVAILABLE,
                 building_uid=self.building_preview.uid,
                 pos=tuple(god.input.mouse_world),
             )
             if self.count_item(self.building_preview.item) < 1:
-                self.building_preview = None
+                self.set_building_preview(None)

@@ -1,3 +1,5 @@
+import math
+import random
 import typing
 
 import pygame
@@ -18,6 +20,7 @@ class Drop:
         self.item: ItemOD = item
         self.amount = amount
         self.last_raycast = pygame.time.get_ticks()
+        self.anim_offset = random.uniform(0, math.tau)
 
     @property
     def hitbox(self):
@@ -33,7 +36,7 @@ class Drop:
             round(self.pos.x, constants.DIGIT_PRECISION),
             round(self.pos.y, constants.DIGIT_PRECISION),
             self.item.uid,
-            self.amount,
+            self.anim_offset,
         ]
 
     def frame(self):

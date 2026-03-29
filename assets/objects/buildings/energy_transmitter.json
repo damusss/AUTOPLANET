@@ -1,4 +1,21 @@
 {
-    "size": [1,1],
-    "interface": false
+    "size": [1, 1],
+    "interface": false,
+    "energy_radius": 12,
+    "energy_endpoint_type": "transmitter",
+    "replace_tile": true,
+    "floor": true,
+    "states": {
+        "on": {
+            "default_image": true,
+            "light": {
+                "radius": 5,
+                "intensity": 120,
+                "color": "#00CCFF"
+            }
+        },
+        "off": {
+            "default": true
+        }
+    }
 }

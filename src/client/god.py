@@ -12,13 +12,13 @@ if typing.TYPE_CHECKING:
     from src.client.world.world_rendering import WorldRendering
 
 dt: float = 0
-unit_px: float
-windowing: Windowing = None
-rendering: WorldRendering = None
+unit_px: float = 0
+ui: WorldUI = None
+input: Input = None
 client: Client = None
-world: WorldState = None
 assets: Assets = None
 player: Player = None
 camera: Camera = None
-input: Input = None
-ui: WorldUI = None
+world: WorldState = None
+windowing: Windowing = None
+rendering: WorldRendering = None

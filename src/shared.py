@@ -1,3 +1,5 @@
+import random
+
 import pygame
 
 from src import constants
@@ -17,9 +19,7 @@ class CraftQueueItem:
             self.item.uid,
             self.amount,
             self.phantom,
-            pygame.time.get_ticks() - self.start_time
-            if self.start_time is not None
-            else None,
+            eval_delta(self.start_time) if self.start_time is not None else None,
         ]
 
     @classmethod
@@ -28,16 +28,20 @@ class CraftQueueItem:
             ItemOD.get(data[0]),
             data[1],
             data[2],
-            pygame.time.get_ticks() - data[3] if data[3] is not None else None,
+            eval_delta(data[3]) if data[3] is not None else None,
         )
 
 
 class Slot:
-    def __init__(self, item, amount, filter_=None, i=-1):
+    hitbox: pygame.Rect
+
+    def __init__(self, item, amount, filter_=None, i=-1, cont: str | None = None):
         self.item: ItemOD = item
         self.amount = amount
         self.filter = filter_
         self.i = i
+        if cont:
+            self.cont = cont
 
     @property
     def empty(self):
@@ -63,6 +67,8 @@ class Slot:
             return item.name_id in self.filter[1]
         elif self.filter[0] == constants.INVENTORY_FILTER_CATEGORY:
             return item.category in self.filter[1]
+        elif self.filter[0] == constants.INVENTORY_FILTER_READONLY:
+            return False
 
     def get_client_data(self):
         return [
@@ -107,6 +113,15 @@ class RaycastHit:
             data["td"],
             data["bd"],
         )
+
+
+class Mail:
+    def __init__(self, type, client_id, **data):
+        self.type = type
+        self.client_id = client_id
+        self.data: dict = data
+        for attr, val in self.data.items():
+            setattr(self, attr, val)
 
 
 class CraftAvailabilityStatus:
@@ -203,3 +218,50 @@ def get_chunk_world_pos(chunk_pos):
         chunk_pos[0] * constants.CHUNK_SIZE - constants.CHUNK_SIZE / 2,
         chunk_pos[1] * constants.CHUNK_SIZE - constants.CHUNK_SIZE / 2,
     )
+
+
+def rect_collide_circle(rect: pygame.FRect, center, radius):
+    dx = max(abs(center[0] - rect.centerx) - rect.w / 2, 0)
+    dy = max(abs(center[1] - rect.centery) - rect.h / 2, 0)
+    distance2 = dx * dx + dy * dy
+    return distance2 <= radius**2
+
+
+def get_drop_random_pos(hitbox: pygame.FRect):
+    return pygame.Vector2(
+        random.uniform(
+            hitbox.left + constants.DROP_SIZE / 2,
+            hitbox.right - constants.DROP_SIZE / 2,
+        ),
+        random.uniform(
+            hitbox.top + constants.DROP_SIZE / 2,
+            hitbox.bottom - constants.DROP_SIZE / 2,
+        ),
+    )
+
+
+def get_chunk_keys_colliding_circle(center, radius, offset=0):
+    center = pygame.Vector2(center)
+    north = pygame.Vector2(center.x, center.y - radius - offset)
+    south = pygame.Vector2(center.x, center.y + radius + offset)
+    east = pygame.Vector2(center.x - radius - offset, center.y)
+    west = pygame.Vector2(center.x + radius + offset, center.y)
+    north_cpos = get_chunk_pos(north)
+    south_cpos = get_chunk_pos(south)
+    east_cpos = get_chunk_pos(east)
+    west_cpos = get_chunk_pos(west)
+    colliding = set()
+    for cx in range(int(east_cpos.x), int(west_cpos.x) + 1):
+        for cy in range(int(north_cpos.y), int(south_cpos.y) + 1):
+            hitbox = pygame.FRect(
+                get_chunk_world_pos((cx, cy)),
+                (constants.CHUNK_SIZE, constants.CHUNK_SIZE),
+            )
+            if rect_collide_circle(hitbox, center, radius):
+                key = get_chunk_key((cx, cy))
+                colliding.add(key)
+    return colliding
+
+
+def eval_delta(time):
+    return pygame.time.get_ticks() - time

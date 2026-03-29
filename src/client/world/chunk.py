@@ -74,6 +74,10 @@ class BuildingDataHolder:
     def state(self) -> str:
         return self.data[4]
 
+    @property
+    def has_energy(self) -> bool:
+        return self.data[5]
+
 
 class Chunk:
     def __init__(self, data):
@@ -233,9 +237,10 @@ class Chunk:
                         (cx * constants.TILE_PX, cy * constants.TILE_PX),
                     )
                     if tile[1]:
-                        self.tile_hitboxes[(cx, cy)] = pygame.FRect(
+                        hitbox = pygame.FRect(
                             self.world_topleft.x + cx, self.world_topleft.y + cy, 1, 1
                         )
+                        self.tile_hitboxes[(cx, cy)] = hitbox
                     else:
                         surface.blit(
                             god.assets.tile_not_solid_overlay,
@@ -253,7 +258,9 @@ class Chunk:
         surf_w = (constants.CHUNK_SIZE + (padding) * 2) * constants.TILE_PX
         surface = pygame.Surface((surf_w, surf_w), pygame.SRCALPHA)
         for bdata in self.static_buildings:
-            image = god.assets.buildings[bdata.building_od.states[bdata.state].image_name]
+            image = god.assets.buildings[
+                bdata.building_od.states[bdata.state].image_name
+            ]
             rel_x = bdata.topleft_x - self.world_topleft.x + padding
             rel_y = bdata.topleft_y - self.world_topleft.y + padding
             surface.blit(image, (rel_x * constants.TILE_PX, rel_y * constants.TILE_PX))

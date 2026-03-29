@@ -2,7 +2,7 @@ import json
 import socket
 import typing
 
-from src import mailbox
+from src import shared
 from src import constants
 
 if typing.TYPE_CHECKING:
@@ -32,7 +32,7 @@ class SocketClientConnection(ClientConnection):
             self.socket.sendall(sock.encode("utf-8"))
         except ConnectionResetError:
             self.server.mailbox.put(
-                mailbox.Mail(mailbox.MAIL_DISCONNECT, self.client_id)
+                shared.Mail(constants.MAIL_DISCONNECT, self.client_id)
             )
 
 
@@ -57,13 +57,13 @@ class SocketServerConnection(ServerConnection):
         self.socket.close()
 
     def put_mail(self, type, client_id, **data):
-        self.server.mailbox.put(mailbox.Mail(type, client_id, **data))
+        self.server.mailbox.put(shared.Mail(type, client_id, **data))
 
     def frame(self):
         try:
             conn, addr = self.socket.accept()
             conn.setblocking(False)
-            self.put_mail(mailbox.MAIL_CONNECT, None, socket=conn)
+            self.put_mail(constants.MAIL_CONNECT, None, socket=conn)
         except BlockingIOError:
             ...
 
@@ -79,8 +79,8 @@ class SocketServerConnection(ServerConnection):
                                 sock["type"], sock["client_id"], **sock["data"]
                             )
                 else:
-                    self.put_mail(mailbox.MAIL_DISCONNECT, client.id)
+                    self.put_mail(constants.MAIL_DISCONNECT, client.id)
             except BlockingIOError:
                 ...
             except ConnectionResetError:
-                self.put_mail(mailbox.MAIL_DISCONNECT, client.id)
+                self.put_mail(constants.MAIL_DISCONNECT, client.id)

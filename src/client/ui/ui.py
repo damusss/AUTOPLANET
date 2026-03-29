@@ -1,13 +1,16 @@
 import pygame
 
-from src import mailbox
 from src import constants
 from src.client import god
 from src.object_data import ItemOD
+from src.client.ui import buildings
 from src.client.ui.panel import render_panel_bg, render_panel_outline
 from src.client.ui.raycast_info import RaycastInfoUI
 from src.client.ui.inventory import FloatingSlot
-from src.client.ui.interfaces import InventoryInterface, CraftingInterface
+from src.client.world.chunk import BuildingDataHolder
+from src.client.ui.crafting import CraftingInterface
+from src.client.ui.building import BuildingInterface
+from src.client.ui.inventory import InventoryInterface
 
 
 class UIRaycastHit:
@@ -39,76 +42,36 @@ class WorldUI:
         self.inventory = InventoryInterface()
         self.crafting_interface = CraftingInterface()
         self.cursor = constants.CURSOR_IDLE_WORLD
+        self.building_interfaces: dict[str, BuildingInterface] = (
+            BuildingInterface.get_interfaces()
+        )
+        assert buildings
 
     def mouse_clicked(self, event: pygame.Event):
+        interface_slots = []
         if self.open_interface:
             self.open_interface.mouse_clicked(event)
-        for i, slot in enumerate(god.player.inventory_slots):
-            if slot.hitbox.collidepoint(event.pos):
-                if self.inventory.floating_slot.source_slot is None:
-                    if not slot.empty:
-                        if event.button == pygame.BUTTON_LEFT:
-                            self.inventory.floating_slot = FloatingSlot(
-                                slot, slot.amount
-                            )
-                        elif event.button == pygame.BUTTON_RIGHT:
-                            self.inventory.floating_slot = FloatingSlot(
-                                slot,
-                                slot.amount // 2 if slot.amount > 1 else slot.amount,
-                            )
-                else:
-                    source = self.inventory.floating_slot.source_slot
-                    if event.button == pygame.BUTTON_LEFT:
-                        if slot is source:
-                            self.inventory.floating_slot = FloatingSlot(None, 0)
-                        else:
-                            if slot.empty or (
-                                source.item == slot.item and not slot.full
-                            ):
-                                if not slot.empty or slot.check_filter(source.item):
-                                    available = source.item.stack_size - slot.amount
-                                    to_add = min(
-                                        available, self.inventory.floating_slot.amount
-                                    )
-                                    god.client.conn.mail(
-                                        mailbox.MAIL_INVENTORY_ACTION,
-                                        action=constants.INVENTORY_ACTION_MOVE,
-                                        source={
-                                            "container": "player",
-                                            "slot": source.i,
-                                        },
-                                        dest={"container": "player", "slot": i},
-                                        amount=to_add,
-                                    )
-                            else:
-                                if slot.check_filter(
-                                    source.item
-                                ) and source.check_filter(slot.item):
-                                    god.client.conn.mail(
-                                        mailbox.MAIL_INVENTORY_ACTION,
-                                        action=constants.INVENTORY_ACTION_SWAP,
-                                        source={
-                                            "container": "player",
-                                            "slot": source.i,
-                                        },
-                                        dest={"container": "player", "slot": i},
-                                        amount=None,
-                                    )
-                    elif event.button == pygame.BUTTON_RIGHT:
-                        if slot.empty or (source.item == slot.item and not slot.full):
-                            if slot is not source:
-                                if not slot.empty or slot.check_filter(source.item):
-                                    god.client.conn.mail(
-                                        mailbox.MAIL_INVENTORY_ACTION,
-                                        action=constants.INVENTORY_ACTION_MOVE,
-                                        source={
-                                            "container": "player",
-                                            "slot": source.i,
-                                        },
-                                        dest={"container": "player", "slot": i},
-                                        amount=1,
-                                    )
-                break
+            interface_slots = self.open_interface.get_slots()
+        self.inventory.mouse_clicked(event, interface_slots)
+
+    def refresh_building_interact(self, base_data, building_data):
+        data_holder = BuildingDataHolder(base_data)
+        if not self.inventory_open:
+            self.inventory_open = True
+            god.player.set_building_preview(None)
+        old_interface = self.open_interface
+        self.open_interface = self.building_interfaces[data_holder.building_od]
+        if old_interface != self.open_interface and isinstance(
+            old_interface, BuildingInterface
+        ):
+            self.open_interface.unsubscribe()
+            self.open_interface = self.building_interfaces[data_holder.building_od]
+        if (
+            self.open_interface.building_data is not None
+            and self.open_interface.building_data.id != data_holder.id
+        ):
+            self.open_interface.unsubscribe()
+        self.open_interface.refresh_data(data_holder, building_data)
 
     def render_stats(self):
         box_w = god.windowing.width * constants.UI_BARS_W_MULT
@@ -202,6 +165,7 @@ class WorldUI:
         self.render_craft_queue()
         prev_ray = self.ui_raycast
         self.ui_raycast = None
+        cont = pygame.Rect()
         if self.inventory_open:
             cont, hovering_slot = self.inventory.render(self.b)
             crafting_slot = False
@@ -237,7 +201,9 @@ class WorldUI:
                         constants.RAYCAST_UI_ITEM,
                         hovering_slot.filter,
                     )
-        if self.ui_raycast != prev_ray:
+        if self.ui_raycast != prev_ray and not cont.collidepoint(
+            god.input.mouse_screen
+        ):
             pygame.event.post(
                 pygame.Event(
                     pygame.MOUSEBUTTONUP, button=pygame.BUTTON_LEFT, emulated=True
@@ -261,7 +227,7 @@ class WorldUI:
     def toggle_inventory(self, manual=False):
         if not self.inventory_open:
             self.open_interface = self.crafting_interface
-            god.player.building_preview = None
+            god.player.set_building_preview(None)
         else:
             if manual:
                 building = None
@@ -269,8 +235,9 @@ class WorldUI:
                     if self.inventory.floating_slot.item is not None:
                         building = self.inventory.floating_slot.item.building
                 if building is not None:
-                    god.player.building_preview = building
-                    god.player.building_available = constants.BUILDING_STATUS_OBSTRUCTED
+                    god.player.set_building_preview(building)
+            if isinstance(self.open_interface, BuildingInterface):
+                self.open_interface.unsubscribe()
             self.open_interface = None
             self.inventory.floating_slot = FloatingSlot(None, 0)
         self.inventory_open = not self.inventory_open

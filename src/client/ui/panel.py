@@ -34,7 +34,8 @@ def render_panel(
 ):
     if sharp_bg_corners is None:
         sharp_bg_corners = []
-    rect = pygame.FRect(rect)
+    if not isinstance(rect, pygame.Rect | pygame.FRect):
+        rect = pygame.FRect(rect)
     cs = corner_size
     if rect.w < cs * 2:
         rect.w = cs * 2

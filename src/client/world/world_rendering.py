@@ -1,3 +1,4 @@
+import math
 import typing
 
 import pygame
@@ -6,7 +7,7 @@ from src import shared
 from src import constants
 from src.client import god
 from src.client.ui import ui
-from src.object_data import ItemOD
+from src.object_data import ItemOD, BuildingOD
 
 if constants.NEW_RENDER:
     from pygame._render import Texture
@@ -23,6 +24,7 @@ class WorldRendering:
         self.renderer = god.windowing.renderer
         self.ui = ui.WorldUI(self.renderer)
         self.debug = False
+        self.energy_debug = False
         self.refresh_light_textures()
         if constants.NEW_RENDER and False:
             self.star_intermediate_texture = Texture(
@@ -42,6 +44,11 @@ class WorldRendering:
             self.renderer, god.windowing.window.size, target=True
         )
         self.light_overlay_texture.blend_mode = pygame.BLENDMODE_MUL
+        self.energy_debug_overlay_texture = Texture(
+            self.renderer, god.windowing.window.size, target=True
+        )
+        self.energy_debug_overlay_texture.blend_mode = pygame.BLENDMODE_BLEND
+        self.energy_debug_overlay_texture.alpha = constants.ENERGY_DEBUG_ALPHA
 
     def render(self):
         self.render_light_overlay()
@@ -58,14 +65,34 @@ class WorldRendering:
             self.render_debug()
 
     def render_drops(self):
-        for px, py, uid, amount in god.world.drops_data:
-            rect = (
-                px - constants.DROP_IMAGE_SIZE / 2,
-                py - constants.DROP_IMAGE_SIZE / 2,
-                constants.DROP_IMAGE_SIZE,
-                constants.DROP_IMAGE_SIZE,
-            )
+        for px, py, uid, anim_offset in god.world.drops_data:
             item_name = ItemOD.get(uid).name_id
+            size = constants.DROP_SIZE + (
+                (
+                    constants.DROP_SIZE * god.assets.drop_inflate_percentages[item_name]
+                    - constants.DROP_SIZE
+                )
+                / 2
+            )
+            animation = (
+                (
+                    (
+                        math.sin(
+                            pygame.time.get_ticks() * constants.DROP_ANIM_TIME_MULT
+                            + anim_offset
+                        )
+                    )
+                    + 1
+                )
+                / 2
+                * constants.DROP_ANIM_H
+            )
+            rect = (
+                px - size / 2,
+                py - size / 2 - animation,
+                size,
+                size,
+            )
             god.assets.item_texs[item_name].draw(None, god.camera.rect_to_screen(rect))
 
     def render_player(self, player: PlayerLike):
@@ -148,14 +175,21 @@ class WorldRendering:
         if god.ui.can_interact_world():
             color = constants.HOVERING_TILE_COLOR
             distance = god.player.pos.distance_to(god.player.raycast.hitbox.center)
-            if distance > constants.PLAYER_REACH_RADIUS or not (
+            if distance > (constants.PLAYER_REACH_RADIUS) or not (
                 god.player.raycast.object_data.break_requirements is None
                 or god.player.inventory_slots[constants.INVENTORY_HAND_I].contains(
                     god.player.raycast.object_data.break_requirements,
                     1,
                 )
             ):
-                color = constants.HOVERING_TILE_UNAVAILABLE_COLOR
+                if (
+                    god.player.raycast.type == constants.RAYCAST_BUILDING
+                    and distance <= constants.PLAYER_INTERACT_RADIUS
+                    and god.player.raycast.object_data.interface
+                ):
+                    color = constants.HOVERING_TILE_FAR_COLOR
+                else:
+                    color = constants.HOVERING_TILE_UNAVAILABLE_COLOR
             god.assets.raycast_corner_tex.color = color
             box = god.player.raycast.hitbox
             for rect, fx, fy in (
@@ -173,6 +207,25 @@ class WorldRendering:
             god.input.mouse_world, god.player.building_preview.size
         )
         rect = pygame.FRect(topleft, god.player.building_preview.size)
+        if (
+            god.player.building_preview.energy_endpoint_type
+            != constants.ENDPOINT_MACHINE
+        ):
+            debug_tex = (
+                god.assets.energy_plant_debug_tex
+                if god.player.building_preview == BuildingOD.objects.energy_plant
+                else god.assets.energy_transmitter_debug_tex
+            )
+            debug_tex.alpha = constants.ENERGY_DEBUG_ALPHA
+            debug_tex.draw(
+                None,
+                god.camera.rect_to_screen(
+                    pygame.FRect(
+                        (0, 0), (god.player.building_preview.energy_radius * 2,) * 2
+                    ).move_to(center=rect.center)
+                ),
+            )
+            debug_tex.alpha = 255
         tex = god.assets.building_preview_texs[god.player.building_preview.name_id]
         tex.color = (
             constants.GREEN_GOOD
@@ -183,10 +236,42 @@ class WorldRendering:
         tex.draw(None, god.camera.rect_to_screen(rect))
 
     def render_world_ui(self):
+        if self.energy_debug:
+            self.render_energy_debug()
         if god.player.raycast is not None and god.player.building_preview is None:
             self.render_raycast()
         if god.player.building_preview is not None:
             self.render_building_preview()
+
+    def render_energy_debug(self):
+        self.renderer.target = self.energy_debug_overlay_texture
+        self.renderer.draw_color = 0
+        self.renderer.clear()
+        for chunk in god.world.loaded_chunks.values():
+            for bd in chunk.static_buildings:
+                if not bd.has_energy:
+                    continue
+                tex = None
+                if bd.building_od == BuildingOD.objects.energy_plant:
+                    tex = god.assets.energy_plant_debug_tex
+                elif bd.building_od == BuildingOD.objects.energy_transmitter:
+                    tex = god.assets.energy_transmitter_debug_tex
+                if tex is not None:
+                    tex.draw(
+                        None,
+                        god.camera.rect_to_screen(
+                            pygame.FRect(
+                                (0, 0), (bd.building_od.energy_radius * 2,) * 2
+                            ).move_to(
+                                center=(
+                                    bd.topleft_x + bd.building_od.size[0] / 2,
+                                    bd.topleft_y + bd.building_od.size[1] / 2,
+                                )
+                            )
+                        ),
+                    )
+        self.renderer.target = None
+        self.energy_debug_overlay_texture.draw(None, self.renderer.get_viewport())
 
     def render_debug(self):
         self.renderer.draw_color = constants.DEBUG_PLAYER_HITBOX_COL
@@ -198,6 +283,24 @@ class WorldRendering:
             if player_hitbox.colliderect(chunk.world_rect):
                 for hitbox in chunk.tile_hitboxes.values():
                     self.renderer.draw_rect(god.camera.rect_to_screen(hitbox))
+                for bd in chunk.static_buildings:
+                    if bd.building_od.floor:
+                        self.renderer.draw_rect(
+                            god.camera.rect_to_screen(
+                                pygame.FRect(
+                                    (bd.topleft_x, bd.topleft_y), bd.building_od.size
+                                )
+                            )
+                        )
+        for px, py, uid, amount in god.world.drops_data:
+            rect = (
+                px - constants.DROP_SIZE / 2,
+                py - constants.DROP_SIZE / 2,
+                constants.DROP_SIZE,
+                constants.DROP_SIZE,
+            )
+            self.renderer.draw_color = "magenta"
+            self.renderer.draw_rect(god.camera.rect_to_screen(rect))
 
     def render_light_overlay(self):
         self.renderer.target = self.light_overlay_texture
@@ -243,11 +346,10 @@ class WorldRendering:
         self.renderer.draw_color = 0
         self.renderer.clear()
 
-        for chunk in god.world.loaded_chunks.values():
-            if "tiles" in chunk.layers:
-                chunk.layers["tiles"].render(self.renderer)
-            if "static_buildings" in chunk.layers:
-                chunk.layers["static_buildings"].render(self.renderer)
+        for layer_name in ["tiles", "static_buildings"]:
+            for chunk in god.world.loaded_chunks.values():
+                if layer_name in chunk.layers:
+                    chunk.layers[layer_name].render(self.renderer)
         self.render_drops()
 
         self.light_overlay_texture.draw(None, self.lit_texture_layer.get_rect())

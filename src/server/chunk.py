@@ -8,6 +8,7 @@ from src.server import god
 from src.server import terrain
 from src.object_data import Star, Dust, BigStar, BlackHole, TileOD
 from src.server.drop import Drop
+from src.server.energy import EnergyProvider
 
 
 class Chunk:
@@ -18,6 +19,8 @@ class Chunk:
         self.world_rect = pygame.FRect(
             self.world_topleft, (constants.CHUNK_SIZE, constants.CHUNK_SIZE)
         )
+        self.refresh_pending = False
+        self.energy_providers: set[EnergyProvider] = set()
         self.building_ids = set()
         self.building_floor_hitboxes: list[pygame.FRect] = []
         self.building_ids_table: dict[tuple[int, int], str] = {}
@@ -33,6 +36,23 @@ class Chunk:
             [None] * constants.CHUNK_SIZE * constants.CHUNK_SIZE
         )  # (type ID, solid 1|0, ore amount)
         self.generate()
+
+    @property
+    def buildings(self):
+        return (god.world.buildings[bid] for bid in self.building_ids)
+
+    def get_energy_providers_for_rect(self, rect) -> list[EnergyProvider]:
+        providers = []
+        for provider in self.energy_providers:
+            if shared.rect_collide_circle(rect, provider.center, provider.radius):
+                providers.append(provider)
+        return providers
+
+    def refresh(self):
+        if self.refresh_pending:
+            return
+        if self.chunk_key not in god.world.refresh_queued_chunks:
+            god.world.refresh_queued_chunks.add(self.chunk_key)
 
     def generate(self):
         self.generate_tiles()

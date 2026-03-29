@@ -137,7 +137,8 @@ timerc_frame(PyObject *self, PyObject *null)
     Py_RETURN_NONE;
 }
 
-static void timerc_free(void *module)
+static void
+timerc_free(void *module)
 {
     if (global_timers != NULL)
     {
@@ -162,7 +163,7 @@ static PyMethodDef timerc_methods[] = {
 static struct PyModuleDef timerc_module = {
     PyModuleDef_HEAD_INIT,
     .m_name = "timerc",
-    .m_doc = NULL, /* docs*/
+    .m_doc = "AUTOPLANET fast timer extension",
     .m_size = -1,
     .m_methods = timerc_methods,
     .m_free = (freefunc)timerc_free};

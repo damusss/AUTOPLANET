@@ -35,11 +35,15 @@ class RaycastInfoUI:
                 bottom = self.render_drops(
                     bottom, raycast, col_w, cs, self.b, self.b * 2
                 )
-            bottom = self.render_tile_pos(
+            bottom = self.render_object_pos(
                 bottom, raycast, col_w, cs, self.b, self.b * 2
             )
         elif raycast.type == constants.RAYCAST_BUILDING:
-            bottom = self.render_tile_pos(
+            if raycast.object_data.need_energy or raycast.object_data.interface:
+                bottom = self.render_building_interaction(
+                    bottom, raycast, col_w, cs, self.b, self.b * 2
+                )
+            bottom = self.render_object_pos(
                 bottom, raycast, col_w, cs, self.b, self.b * 2
             )
         elif raycast.type == constants.RAYCAST_UI_ITEM:
@@ -58,6 +62,10 @@ class RaycastInfoUI:
                         )
             else:
                 bottom = self.render_item_amount(
+                    bottom, raycast, col_w, cs, self.b, self.b * 2
+                )
+            if raycast.item.smelt_result is not None:
+                bottom = self.render_item_smelt_result(
                     bottom, raycast, col_w, cs, self.b, self.b * 2
                 )
             building = raycast.item.building
@@ -84,9 +92,11 @@ class RaycastInfoUI:
     def render_slot_filter(self, top, raycast: "UIRaycastHit", col_w, cs, bb, b):
         content_w = col_w - b * 2
         title_h = content_w * (constants.UI_RAYCAST_INFO_MSG_H_MULT)
-        text = "Unknown Filter"
+        text = "Unknown Slot Filter"
         if raycast.filter[0] == constants.INVENTORY_FILTER_CATEGORY:
             text = f"Slot Whitelist: {', '.join([constants.ITEM_CATEGORY_NAMES[cat] for cat in raycast.filter[1]])}"
+        elif raycast.filter[0] == constants.INVENTORY_FILTER_READONLY:
+            text = "Slot is read-only."
         title_tex, title_rect = god.assets.font.get_texture_and_rect(
             text, "white", title_h, content_w
         )
@@ -174,13 +184,76 @@ class RaycastInfoUI:
 
         return box.bottom
 
+    def render_item_smelt_result(self, top, raycast: "UIRaycastHit", col_w, cs, bb, b):
+        content_w = col_w - b * 2
+        subtitle_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        item_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        item_name_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
+        res_tex, res_rect = god.assets.font.get_texture_and_rect(
+            "Smelted", "white", subtitle_h
+        )
+        place_tex, place_rect = god.assets.font.get_texture_and_rect(
+            "Smelt In (min.)", "white", subtitle_h
+        )
+        box = pygame.Rect(god.windowing.width - col_w - bb, top + bb, col_w, bb)
+        to_draw = []
+        res_rect = res_rect.move_to(midtop=box.midbottom)
+        box.h += res_rect.h + bb
+        to_draw.append((res_tex, res_rect))
+        name_tex, name_rect = god.assets.font.get_texture_and_rect(
+            raycast.item.smelt_result.display_name, "white", item_name_h
+        )
+        image_tex = god.assets.item_texs[raycast.item.smelt_result.name_id]
+        to_draw.append(
+            (
+                image_tex,
+                pygame.Rect(0, 0, item_h, item_h).move_to(
+                    topright=(box.right - b, box.bottom)
+                ),
+            )
+        )
+        to_draw.append(
+            (
+                name_tex,
+                name_rect.move_to(center=(box.centerx, box.bottom + item_h / 2)),
+            )
+        )
+        box.h += item_h + b
+        place_rect = place_rect.move_to(midtop=box.midbottom)
+        box.h += place_rect.h + bb
+        to_draw.append((place_tex, place_rect))
+        place_od = ItemOD.get(raycast.item.smelt_result.create_data.type)
+        name_tex, name_rect = god.assets.font.get_texture_and_rect(
+            place_od.display_name, "white", item_name_h
+        )
+        image_tex = god.assets.item_texs[place_od.name_id]
+        to_draw.append(
+            (
+                image_tex,
+                pygame.Rect(0, 0, item_h, item_h).move_to(
+                    topright=(box.right - b, box.bottom)
+                ),
+            )
+        )
+        to_draw.append(
+            (
+                name_tex,
+                name_rect.move_to(center=(box.centerx, box.bottom + item_h / 2)),
+            )
+        )
+        box.h += item_h + b
+        render_panel_bg(box, cs)
+        for img, rect in to_draw:
+            img.draw(None, rect)
+        return box.bottom
+
     def render_item_create_in(self, top, raycast: "UIRaycastHit", col_w, cs, bb, b):
         content_w = col_w - b * 2
         subtitle_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
         item_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
         item_name_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
         subtitle_tex, subtitle_rect = god.assets.font.get_texture_and_rect(
-            "Create In", "white", subtitle_h
+            "Create In (min.)", "white", subtitle_h
         )
         box = pygame.Rect(god.windowing.width - col_w - bb, top + bb, col_w, bb)
         to_draw = []
@@ -393,10 +466,47 @@ class RaycastInfoUI:
 
         return box.bottom
 
-    def render_tile_pos(self, top, raycast: shared.RaycastHit, col_w, cs, bb, b):
-        too_far = (
-            god.player.pos.distance_to(raycast.hitbox.center)
-            > constants.PLAYER_REACH_RADIUS
+    def render_building_interaction(
+        self, top, raycast: shared.RaycastHit, col_w, cs, bb, b
+    ):
+        content_w = col_w - b * 2
+        box = pygame.Rect(god.windowing.width - bb - col_w, top + bb, col_w, bb)
+        text_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
+        to_draw = []
+        if raycast.object_data.interface:
+            if (
+                god.player.pos.distance_to(raycast.hitbox.center)
+                <= constants.PLAYER_INTERACT_RADIUS
+            ):
+                text = "Right click to interact."
+            else:
+                text = "Too far to interact."
+            click_tex, click_rect = god.assets.font.get_texture_and_rect(
+                text, constants.UI_RAYCAST_INFO_DESCR_COL, text_h, content_w
+            )
+            to_draw.append((click_tex, click_rect.move_to(midtop=box.midbottom)))
+            box.h += click_rect.h + bb
+        text_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        if raycast.object_data.need_energy:
+            if raycast.building_data[2]:
+                text = "Has energy"
+                col = constants.GREEN_GOOD
+            else:
+                text = "No energy"
+                col = constants.RED_BAD
+            energy_tex, energy_rect = god.assets.font.get_texture_and_rect(
+                text, col, text_h
+            )
+            to_draw.append((energy_tex, energy_rect.move_to(midtop=box.midbottom)))
+            box.h += energy_rect.h + bb
+        render_panel_bg(box, cs)
+        for tex, rect in to_draw:
+            tex.draw(None, rect)
+        return box.bottom
+
+    def render_object_pos(self, top, raycast: shared.RaycastHit, col_w, cs, bb, b):
+        too_far = god.player.pos.distance_to(raycast.hitbox.center) > (
+            constants.PLAYER_REACH_RADIUS
         )
         content_w = col_w - b * 2
         split = raycast.chunk_key.split(";")
@@ -417,7 +527,7 @@ class RaycastInfoUI:
         render_panel_bg(box, cs)
         if too_far:
             far_tex, far_rect = god.assets.font.get_texture_and_rect(
-                "Too far", constants.RED_BAD, text_h
+                "Too far to break", constants.RED_BAD, text_h
             )
             far_tex.draw(None, far_rect.move_to(midtop=(box.centerx, box.top + b)))
         text_tex.draw(

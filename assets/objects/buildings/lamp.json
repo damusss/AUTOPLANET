@@ -1,4 +1,17 @@
 {
     "size": [1, 1],
-    "interface": false
+    "interface": false,
+    "states": {
+        "on": {
+            "default_image": true,
+            "light": {
+                "radius": 12,
+                "intensity": 220,
+                "color": "white"
+            }
+        },
+        "off": {
+            "default": true
+        }
+    }
 }

@@ -3,14 +3,16 @@ import random
 import pygame
 
 from src import shared
-from src import mailbox
 from src import constants
 from src.server import god
 from src.timerc import timerc
+from src.server import building
+from src.server import buildings
 from src.object_data import TileOD, BuildingOD
 from src.server.drop import Drop
 from src.server.chunk import Chunk
 from src.server.player import Player
+from src.server.energy import EnergyConn
 from src.server.building import Building
 
 
@@ -24,6 +26,11 @@ class World:
         self.clock = pygame.Clock()
         self.chunks: dict[str, Chunk] = {}
         self.buildings: dict[str, Building] = {}
+        self.refresh_queued_chunks = set()
+        self.disrupt_alerted_buildings = set()
+        self.disrupt_alerted_plants = set()
+        building.EnergyConn_t = EnergyConn
+        assert buildings
 
     def player_connect(self, client):
         player = Player(client)
@@ -35,12 +42,34 @@ class World:
             self.chunks[chunk].loaded_client_players.remove(player)
         self.players.pop(client.id)
 
-    def load_or_get_chunk(self, key, pos):
+    def energy_disrupt(self, source, energy_conns: list[EnergyConn]):
+        self.disrupt_alerted_buildings = set()
+        self.disrupt_alerted_plants = set()
+        state = set()
+        for conn in energy_conns:
+            conn.disrupted(source, state)
+        for plant_id in self.disrupt_alerted_plants:
+            if plant_id in self.buildings:
+                self.buildings[plant_id].ext.send_energy_activation()
+        for building_id in self.disrupt_alerted_buildings:
+            if building_id in self.buildings:
+                self.buildings[building_id].ext.finalize_energy_disrupt()
+        self.disrupt_alerted_buildings = set()
+        self.disrupt_alerted_plants = set()
+
+    def load_or_get_chunk(self, key, pos) -> Chunk:
         if key in self.chunks:
             return self.chunks[key]
         chunk = Chunk(key, pos)
         self.chunks[key] = chunk
         return chunk
+
+    def load_or_get_chunks(self, keys) -> list[Chunk]:
+        chunks = []
+        for key in keys:
+            cx, cy = key.split(";")
+            chunks.append(self.load_or_get_chunk(key, (int(cx), int(cy))))
+        return chunks
 
     def player_drops_collisions(
         self, player: Player, drops: list[Drop], update, drops_data
@@ -88,7 +117,7 @@ class World:
         if len(player.client_chunks_queue) > 0:
             chunk = self.chunks[player.client_chunks_queue.popleft()]
             player.client.conn.mail(
-                mailbox.MAIL_CHUNK_LOAD,
+                constants.MAIL_CHUNK_LOAD,
                 chunks={chunk.chunk_key: chunk.get_client_data()},
                 refresh=False,
             )
@@ -97,7 +126,7 @@ class World:
             for ckey in diff:
                 self.chunks[ckey].loaded_client_players.remove(player)
                 player.client_loaded_chunks.remove(ckey)
-            player.client.conn.mail(mailbox.MAIL_CHUNK_UNLOAD, chunk_keys=list(diff))
+            player.client.conn.mail(constants.MAIL_CHUNK_UNLOAD, chunk_keys=list(diff))
         return drops_data
 
     def get_chunks_collding_rect(
@@ -126,13 +155,51 @@ class World:
         drop = Drop(pos, chunk, item, amount)
         chunk.drops.append(drop)
 
-    def refresh_chunk(self, chunk: Chunk):
-        for player in chunk.loaded_client_players:
+    def refresh_chunk(self, chunk_or_key: Chunk | str):
+        if isinstance(chunk_or_key, str):
+            chunk_or_key = self.chunks.get(chunk_or_key, None)
+        if chunk_or_key is None:
+            return
+        for player in chunk_or_key.loaded_client_players:
             player.client.conn.mail(
-                mailbox.MAIL_CHUNK_LOAD,
-                chunks={chunk.chunk_key: chunk.get_client_data()},
+                constants.MAIL_CHUNK_LOAD,
+                chunks={chunk_or_key.chunk_key: chunk_or_key.get_client_data()},
                 refresh=True,
             )
+
+    def refresh_building_interact(self, building: Building):
+        for player in building.subscribed_client_players:
+            player.client.conn.mail(
+                constants.MAIL_BUILDING_INTERACT,
+                base_data=building.get_client_data(),
+                building_data=building.ext.get_client_data(),
+            )
+
+    def building_interact(self, player: Player, building_id: str, unsubscribe):
+        if building_id not in self.buildings:
+            return
+        building = self.buildings[building_id]
+        if unsubscribe:
+            player.client_subscribed_building = None
+            if player in building.subscribed_client_players:
+                building.subscribed_client_players.remove(player)
+            return
+        if not building.building_od.interface:
+            return
+        if (
+            player.pos.distance_to(building.hitbox.center)
+            > constants.PLAYER_INTERACT_RADIUS
+        ):
+            return
+        if player.client_subscribed_building is not None:
+            if player in player.client_subscribed_building.subscribed_client_players:
+                player.client_subscribed_building.subscribed_client_players.remove(
+                    player
+                )
+        player.client_subscribed_building = building
+        if player not in building.subscribed_client_players:
+            building.subscribed_client_players.append(player)
+        self.refresh_building_interact(building)
 
     def break_building(self, building: Building):
         building.chunk.building_ids.remove(building.id)
@@ -143,8 +210,32 @@ class World:
                 if bid == building.id:
                     chunk.tile_hitboxes_table.pop(tile_pos)
         self.buildings.pop(building.id)
-        self.drop(building.hitbox.center, building.building_od.item, 1)
+        self.drop(
+            shared.get_drop_random_pos(building.hitbox), building.building_od.item, 1
+        )
+        building.chunk.refresh_pending = True
+        building.on_destroy()
+        building.chunk.refresh_pending = False
         self.refresh_chunk(building.chunk)
+        if building.building_od.floor:
+            self.break_building_on_top(building.hitbox.center - pygame.Vector2(0, 1))
+
+    def break_building_on_top(self, top_pos):
+        ray = self.raycast(top_pos)
+        if ray is None:
+            return
+        if ray.type == constants.RAYCAST_BUILDING:
+            if ray.building_data[0] in self.buildings:
+                building = self.buildings[ray.building_data[0]]
+                if building.require_floor:
+                    self.break_building(building)
+        elif ray.type == constants.RAYCAST_TILE:
+            if ray.hitbox is not None and ray.tile_data is not None:
+                if (
+                    len(ray.tile_data) == 4
+                    and constants.TILE_PLACED in ray.tile_data[3]
+                ):
+                    self.break_raycast(ray)
 
     def break_raycast(self, raycast: shared.RaycastHit):
         chunk = self.chunks[raycast.chunk_key]
@@ -153,28 +244,44 @@ class World:
             if tile_data[1] == 0:
                 return
             tile_data[1] = 0
-            if len(tile_data) == 4 and tile_data[3] == constants.TILE_PLACED:
+            also_refresh = None
+            if len(tile_data) == 4 and constants.TILE_PLACED in tile_data[3]:
                 chunk.tiles_mat[chunk.get_tile_index(raycast.tile_pos)] = None
+                ray_bottom = self.raycast(
+                    (
+                        raycast.tile_pos[0] + chunk.world_topleft.x,
+                        chunk.world_topleft.y + raycast.tile_pos[1] + 1.5,
+                    ),
+                    constants.RAYCASTFLAG_ALL,
+                )
+                if ray_bottom is not None and ray_bottom.type == constants.RAYCAST_TILE:
+                    if (
+                        len(ray_bottom.tile_data) == 4
+                        and constants.TILE_BACKGROUND_FLIP in ray_bottom.tile_data[3]
+                    ):
+                        ray_bottom.tile_data[0] = TileOD.objects.nylium_surface.uid
+                        if ray_bottom.tile_data[3] == constants.TILE_BACKGROUND_FLIP:
+                            ray_bottom.tile_data.pop(3)
+                        else:
+                            ray_bottom.tile_data[3] = constants.TILE_PLACED
+                        also_refresh = ray_bottom.chunk_key
+            top_pos = None
             if raycast.tile_pos in chunk.tile_hitboxes_table:
                 hitbox = chunk.tile_hitboxes_table.pop(raycast.tile_pos)
+                top_pos = hitbox.center - pygame.Vector2(0, 1)
                 chunk.tile_hitboxes.remove(hitbox)
                 tile_od = TileOD.get(tile_data[0])
                 for drop in tile_od.item_drop:
                     self.drop(
-                        (
-                            random.uniform(
-                                hitbox.left + constants.DROP_SIZE / 2,
-                                hitbox.right - constants.DROP_SIZE / 2,
-                            ),
-                            random.uniform(
-                                hitbox.top + constants.DROP_SIZE / 2,
-                                hitbox.bottom - constants.DROP_SIZE / 2,
-                            ),
-                        ),
+                        shared.get_drop_random_pos(hitbox),
                         drop[0],
                         drop[1],
                     )
             self.refresh_chunk(chunk)
+            if also_refresh is not None and also_refresh != chunk.chunk_key:
+                self.refresh_chunk(also_refresh)
+            if top_pos is not None:
+                self.break_building_on_top(top_pos)
         elif raycast.type == constants.RAYCAST_BUILDING:
             if raycast.building_data[0] in self.buildings:
                 self.break_building(self.buildings[raycast.building_data[0]])
@@ -225,11 +332,18 @@ class World:
         return constants.BUILDING_STATUS_AVAILABLE
 
     def can_place_building(self, building_od: BuildingOD, pos, player: Player):
-        if player.pos.distance_to(pos) > constants.PLAYER_REACH_RADIUS:
+        if player.pos.distance_to(pos) > constants.PLAYER_BUILD_RADIUS:
             return constants.BUILDING_STATUS_TOO_FAR
         topleft = shared.get_building_topleft(pos, building_od.size)
         ret_valid_f = constants.BUILDING_STATUS_AVAILABLE
         do_return_f = False
+        if building_od.floor:
+            chunk_key = shared.get_chunk_key(shared.get_chunk_pos(topleft))
+            if chunk_key in self.chunks:
+                hitbox = pygame.FRect(topleft, building_od.size)
+                for player in self.chunks[chunk_key].loaded_client_players:
+                    if player.hitbox.colliderect(hitbox):
+                        return constants.BUILDING_STATUS_PLAYER_IN_THE_WAY
         for x in range(building_od.size[0]):
             floor_ray = self.raycast(
                 (topleft.x + x + 0.5, topleft.y + building_od.size[1] + 0.5),
@@ -291,12 +405,43 @@ class World:
         )
         tile_data = chunk.get_tile(tile_pos)
         hitbox = pygame.FRect(topleft, (1, 1))
+        restore_uid = building_od.restore_tile.uid
+        also_refresh = None
+        if (
+            tile_data is None or tile_data[0] == TileOD.objects.nylium_surface.uid
+        ) and building_od == BuildingOD.objects.nylium_platform:
+            ray_top = self.raycast(
+                topleft + pygame.Vector2(0.5, -0.5), constants.RAYCASTFLAG_COLLIDER
+            )
+            ray_bottom = self.raycast(
+                topleft + pygame.Vector2(0.5, 1.5), constants.RAYCASTFLAG_COLLIDER
+            )
+            if (
+                ray_top is None
+                or ray_top.type != constants.RAYCAST_TILE
+                or ray_top.hitbox is None
+            ):
+                restore_uid = TileOD.objects.nylium_surface.uid
+            if (
+                ray_bottom is not None
+                and ray_bottom.hitbox is not None
+                and ray_bottom.type == constants.RAYCAST_TILE
+                and ray_bottom.tile_data is not None
+            ):
+                if ray_bottom.tile_data[0] == TileOD.objects.nylium_surface.uid:
+                    ray_bottom.tile_data[0] = TileOD.objects.nylium.uid
+                    if len(ray_bottom.tile_data) == 3:
+                        ray_bottom.tile_data.append(constants.TILE_BACKGROUND_FLIP)
+                    else:
+                        ray_bottom.tile_data[3] = constants.TILE_PLACED_BACKGROUND_FLIP
+                    also_refresh = ray_bottom.chunk_key
         if tile_data is not None:
-            tile_data[0] = building_od.restore_tile.uid
+            tile_data[0] = restore_uid
             tile_data[1] = 1
+
         else:
             chunk.tiles_mat[chunk.get_tile_index(tile_pos)] = [
-                building_od.restore_tile.uid,
+                restore_uid,
                 1,
                 0,
                 constants.TILE_PLACED,
@@ -304,6 +449,8 @@ class World:
         chunk.tile_hitboxes.append(hitbox)
         chunk.tile_hitboxes_table[tile_pos] = hitbox
         self.refresh_chunk(chunk)
+        if chunk.chunk_key != also_refresh:
+            self.refresh_chunk(also_refresh)
 
     def place_building(self, building_od: BuildingOD, pos, player: Player):
         status = self.can_place_building(building_od, pos, player)
@@ -322,6 +469,10 @@ class World:
             return
         bid = self.get_building_id()
         building = Building(bid, building_od, topleft, chunk)
+        if building_od.replace_tile:
+            ray = self.raycast(building.hitbox.center, constants.RAYCASTFLAG_ALL)
+            if ray.type == constants.RAYCAST_TILE and ray.hitbox is None:
+                building.require_floor = False
         chunk.building_ids.add(building.id)
         if building_od.floor:
             chunk.building_floor_hitboxes.append(building.hitbox)
@@ -359,6 +510,9 @@ class World:
                     if b_chunk not in building.bordering_chunks:
                         building.bordering_chunks.append(b_chunk)
         self.buildings[building.id] = building
+        chunk.refresh_pending = True
+        building.on_place()
+        chunk.refresh_pending = False
         self.refresh_chunk(chunk)
         return building
 
@@ -395,7 +549,9 @@ class World:
             return shared.RaycastHit(
                 chunk_key,
                 chunk.tile_hitboxes_table.get(tile_pos, None),
-                constants.RAYCAST_TILE,
+                constants.RAYCAST_TILE
+                if tile_data is not None
+                else constants.RAYCAST_EMPTY,
                 TileOD.get(tile_data[0]) if tile_data is not None else None,
                 tile_pos,
                 tile_data,
@@ -422,6 +578,10 @@ class World:
         self.dt = self.clock.tick_busy_loop(constants.SERVER_FPS) / 1000
         god.dt = self.dt
         god.dt = pygame.math.clamp(god.dt, 0, 1 / 60)
+        if len(self.refresh_queued_chunks) > 0:
+            for chunk_key in self.refresh_queued_chunks:
+                self.refresh_chunk(chunk_key)
+            self.refresh_queued_chunks = set()
         checked_chunks_for_drops = set()
         for player in self.players.values():
             drops_data = self.refresh_player_chunks(player, checked_chunks_for_drops)

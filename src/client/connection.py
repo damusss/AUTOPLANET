@@ -2,7 +2,7 @@ import json
 import time
 import socket
 
-from src import mailbox
+from src import shared
 from src import constants
 
 
@@ -19,13 +19,13 @@ class Connection:
         self.check_heartbeat()
 
     def mail_disconnect(self):
-        self.mail(mailbox.MAIL_DISCONNECT)
+        self.mail(constants.MAIL_DISCONNECT)
         self.connected = False
 
     def connection_accepted(self, mail):
         self.connected = True
         self.client.id = mail.client_id
-        self.mail(mailbox.MAIL_NAME, name=self.client.name)
+        self.mail(constants.MAIL_NAME, name=self.client.name)
 
     def force_disconnected(self):
         self.connected = False
@@ -33,7 +33,7 @@ class Connection:
 
     def check_heartbeat(self):
         if time.time() - self.last_heartbeat >= constants.HEARTBEAT:
-            self.mail(mailbox.MAIL_HEARTBEAT)
+            self.mail(constants.MAIL_HEARTBEAT)
             self.last_heartbeat = time.time()
 
 
@@ -81,9 +81,7 @@ class SocketConnection(Connection):
                         self.buffer = ""
                         sock = json.loads(cur_data)
                         self.client.mailbox.put(
-                            mailbox.Mail(
-                                sock["type"], sock["client_id"], **sock["data"]
-                            )
+                            shared.Mail(sock["type"], sock["client_id"], **sock["data"])
                         )
                     self.buffer += data
         except BlockingIOError:
