@@ -57,29 +57,31 @@ class Client:
                 f"[C:/{self.id}] Kicked from server 'local' (client name={self.name})"
             )
         elif mail.type == constants.MAIL_PLAYER_PHYSICS:
-            self.world.player.pos = pygame.Vector2(mail.pos)
-            self.world.player.vel = pygame.Vector2(mail.vel)
-            self.world.player.energy = mail.energy
+            self.world.player.pos = pygame.Vector2(mail.p)
+            self.world.player.vel = pygame.Vector2(mail.v)
+            self.world.player.energy = mail.e
             self.world.player.raycast = (
-                shared.RaycastHit.from_client_data(mail.raycast)
-                if mail.raycast
+                shared.RaycastHit.from_client_data(mail.r)
+                if mail.r
                 else None
             )
-            self.world.drops_data = mail.drops
+            self.world.drops_data = mail.ds
+            self.world.moving_buildings_data = mail.ms
             self.world.player.craft_queue = [
                 shared.CraftQueueItem.from_client_data(data)
-                for data in mail.craft_queue
+                for data in mail.cq
             ]
 
-            for other_player_id, other_player_data in mail.other_players.items():
+            for other_player_id, other_player_data in mail.op.items():
                 other_player_id = int(other_player_id)
                 if other_player_id not in self.world.other_players:
                     continue
                 other_player = self.world.other_players[other_player_id]
-                other_player.pos = pygame.Vector2(other_player_data["pos"])
-                other_player.vel = pygame.Vector2(other_player_data["vel"])
-                other_player.frame_kind = other_player_data["frame_kind"]
-                other_player.frame_index = other_player_data["frame_index"]
+                other_player.pos = pygame.Vector2(other_player_data["p"])
+                other_player.vel = pygame.Vector2(other_player_data["v"])
+                other_player.frame_kind = other_player_data["fk"]
+                other_player.frame_index = other_player_data["fi"]
+                other_player.building_preview = other_player_data["bp"]
 
         elif mail.type == constants.MAIL_PLAYER_STATS:
             self.world.player.health = mail.health
@@ -100,9 +102,13 @@ class Client:
         elif mail.type == constants.MAIL_BUILDING_AVAILABLE:
             self.world.player.building_available = mail.available
         elif mail.type == constants.MAIL_BUILDING_INTERACT:
-            self.world.rendering.ui.refresh_building_interact(
-                mail.base_data, mail.building_data
-            )
+            if mail.broken:
+                if god.ui.open_interface:
+                    god.ui.toggle_inventory()
+            else:
+                self.world.rendering.ui.refresh_building_interact(
+                    mail.base_data, mail.building_data
+                )
 
     def disconnect(self):
         self.mailbox.queue.clear()

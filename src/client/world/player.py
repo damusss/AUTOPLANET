@@ -31,6 +31,7 @@ class OtherPlayer(PlayerLike):
         self.frame_kind = "idle"
         self.frame_index = 0
         self.texture = None
+        self.building_preview: list = None
         self.light = LightData(
             f"other_player_{player_id}",
             constants.PLAYER_LIGHT_RADIUS,
@@ -63,6 +64,8 @@ class Player(PlayerLike):
         self.energy = constants.PLAYER_MAX_ENERGY
         self.health = constants.PLAYER_MAX_HEALTH
         self.raycast: shared.RaycastHit = None
+        self.edit_trajectory_bot = None
+        self.edit_trajectory_kind = "input"
         self.break_start_time = None
         self.building_preview: BuildingOD | None = None
         self.building_available = constants.BUILDING_STATUS_OBSTRUCTED
@@ -104,6 +107,41 @@ class Player(PlayerLike):
                 != constants.ENDPOINT_MACHINE
             ):
                 god.rendering.energy_debug = True
+
+    def set_edit_trajectory(self, bid):
+        if bid is None:
+            self.edit_trajectory_bot = None
+            self.edit_trajectory_kind = "input"
+        else:
+            self.edit_trajectory_bot = bid
+
+    def edit_trajectory_validate_hover(self):
+        if (
+            self.raycast is not None
+            and self.building_preview is None
+            and self.raycast.type == constants.RAYCAST_BUILDING
+            and self.raycast.data[0] != self.edit_trajectory_bot
+        ):
+            available = constants.BUILDING_STATUS_OBSTRUCTED
+            if self.raycast.object_data.static and (
+                (
+                    self.raycast.object_data.inventory_kind
+                    == constants.INVENTORY_KIND_IN_OUT
+                )
+                or (
+                    self.edit_trajectory_kind == constants.INVENTORY_KIND_INPUT
+                    and self.raycast.object_data.inventory_kind
+                    == constants.INVENTORY_KIND_OUTPUT
+                )
+                or (
+                    self.edit_trajectory_kind == constants.INVENTORY_KIND_OUTPUT
+                    and self.raycast.object_data.inventory_kind
+                    == constants.INVENTORY_KIND_INPUT
+                )
+            ):
+                available = constants.BUILDING_STATUS_AVAILABLE
+            return available
+        return None
 
     def count_item(self, item):
         count = 0

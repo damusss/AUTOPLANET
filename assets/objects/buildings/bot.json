@@ -2,5 +2,17 @@
     "size": [1, 1],
     "need_energy": false,
     "static": false,
-    "air": true
+    "air": true,
+    "break_time_s": 0.8,
+    "hitbox_multiplier": 0.65,
+    "inventory_kind": "in_out",
+    "states": {
+        "": {
+            "light": {
+                "radius": 5,
+                "intensity": 115,
+                "color": "#00FFFF"
+            }
+        }
+    }
 }

@@ -1,7 +1,7 @@
 {
     "display_name": "Ammonia Deposit",
-    "description": "",
+    "description": "NOT IMPLEMENTED",
     "item_drop": [["ammonia_powder", 2]],
-    "break_requirements": "pickaxe",
+    "break_requirements": ["pickaxe", "titanium_pickaxe"],
     "break_time_s": 0.7
 }

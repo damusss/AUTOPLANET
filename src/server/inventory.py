@@ -17,10 +17,10 @@ class CommonInventory:
     def empty(self):
         return all((slot.empty for slot in self.slots))
 
-    def has_space(self, item: ItemOD, amount):
+    def has_space(self, item: ItemOD, amount, ignore_filters=True):
         to_add = amount
         for slot in self.slots:
-            if slot.empty:
+            if slot.empty and (ignore_filters or slot.check_filter(item)):
                 added = min(to_add, item.stack_size)
                 to_add -= added
                 if to_add <= 0:
@@ -113,16 +113,18 @@ class Inventory(CommonInventory):
             for i in range(constants.INVENTORY_COLS * constants.INVENTORY_ROWS + 1)
         ]
         self.slots[constants.INVENTORY_HAND_I].set(
-            ItemOD.get("pickaxe"), 1, [constants.INVENTORY_FILTER_CATEGORY, ["tools"]]
+            ItemOD.objects.pickaxe, 1, [constants.INVENTORY_FILTER_CATEGORY, ["tools"]]
         )
         # temp testing
-        self.add(ItemOD.objects.bricks_platform, 10)
+        self.add(ItemOD.objects.storage, 10)
         self.add(ItemOD.objects.furnace, 5)
+        self.add(ItemOD.objects.miner, 5)
         self.add(ItemOD.objects.energy_plant, 3)
         self.add(ItemOD.objects.energy_transmitter, 300)
         self.add(ItemOD.objects.lamp, 20)
         self.add(ItemOD.objects.iron, constants.DEFAULT_STACK_SIZE)
         self.add(ItemOD.objects.iron_ore, constants.DEFAULT_STACK_SIZE)
+        self.add(ItemOD.objects.bot, 100)
 
     def set_dirty(self):
         self.dirty = True
@@ -186,9 +188,9 @@ class Inventory(CommonInventory):
                 return
             if dest_slot.full:
                 return
+            if not dest_slot.check_filter(source_slot.item):
+                return
             if dest_slot.empty:
-                if not dest_slot.check_filter(source_slot.item):
-                    return
                 dest_slot.item = source_slot.item
             can_remove = min(amount, source_slot.amount)
             dest_slot.amount += can_remove

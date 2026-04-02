@@ -2,6 +2,7 @@
     "display_name": "Stone",
     "description": "Main element of the planet's underground.",
     "item_drop": [["core_ore", 1]],
-    "break_requirements": "pickaxe",
-    "break_time_s": 0.5
+    "break_requirements": ["pickaxe", "titanium_pickaxe"],
+    "break_time_s": 0.32,
+    "miner_time_s": 1
 }

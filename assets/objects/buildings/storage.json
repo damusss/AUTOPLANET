@@ -1,4 +1,5 @@
 {
     "size": [1, 1],
+    "inventory_kind": "in_out",
     "need_energy": false
 }

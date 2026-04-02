@@ -45,6 +45,22 @@ class EnergyConn:
             e.energy_conns.remove(self)
         return self
 
+    def get_client_data(self):
+        has_energy = False
+        for e in self.endpoints:
+            if (
+                e.building.building_od.energy_endpoint_type
+                != constants.ENDPOINT_MACHINE
+                and e.building.has_energy
+            ):
+                has_energy = True
+                break
+        return [
+            self.a.building.hitbox.center,
+            self.b.building.hitbox.center,
+            has_energy,
+        ]
+
 
 class EnergyPlant(BuildingExt, name_id="energy_plant"):
     def init(self):
@@ -104,6 +120,7 @@ class EnergyPlant(BuildingExt, name_id="energy_plant"):
         copy = self.energy_conns.copy()
         for conn in list(self.energy_conns):
             conn.destroy()
+            conn.other_endpoint(self).building.chunk.refresh()
         god.world.energy_disrupt(self, copy)
 
 
@@ -163,6 +180,7 @@ class EnergyTransmitter(BuildingExt, name_id="energy_transmitter"):
         copy = self.energy_conns.copy()
         for conn in list(self.energy_conns):
             conn.destroy()
+            conn.other_endpoint(self).building.chunk.refresh()
         god.world.energy_disrupt(self, copy)
 
     def on_conn_activated(self, conn):

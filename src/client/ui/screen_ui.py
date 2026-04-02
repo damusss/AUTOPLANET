@@ -55,7 +55,9 @@ class WorldUI:
         self.inventory.mouse_clicked(event, interface_slots)
 
     def refresh_building_interact(self, base_data, building_data):
-        data_holder = BuildingDataHolder(base_data)
+        data_holder = BuildingDataHolder(
+            base_data, 0 if isinstance(base_data[0], str) else -1
+        )
         if not self.inventory_open:
             self.inventory_open = True
             god.player.set_building_preview(None)
@@ -125,11 +127,61 @@ class WorldUI:
         god.assets.energy_tex.draw(None, circle.inflate(-4, -4))
 
         pos_tex, pos_rect = god.assets.font.get_texture_and_rect(
-            f"X: {int(god.player.pos.x)} Y: {int(god.player.pos.y)}",
-            constants.UI_RAYCAST_INFO_DESCR_COL,
+            f"X: {int(god.player.pos.x)} Y: {-int(god.player.pos.y)}",
+            constants.UI_INFO_DESCR_COL,
             bar_h,
         )
         pos_tex.draw(None, pos_rect.move_to(topleft=(self.b * 2, box.bottom + self.b)))
+
+    def render_edit_trajectory(self):
+        text_h = god.windowing.width * constants.UI_EDIT_TRAJECTORY_TEXT_H
+        extra = (
+            "Take From"
+            if god.player.edit_trajectory_kind == constants.INVENTORY_KIND_INPUT
+            else "Put Into"
+        )
+        text = f"Edit: Bot {god.player.edit_trajectory_kind.title()} ({extra})"
+        kind_tex, kind_rect = god.assets.font.get_texture_and_rect(
+            text,
+            constants.GREEN_GOOD
+            if god.rendering.edit_trajectory_hover_available
+            == constants.BUILDING_STATUS_AVAILABLE
+            else constants.RED_BAD,
+            text_h,
+        )
+        god.assets.font.font.outline = 1
+
+        kind_tex_outline, kind_rect_outline = god.assets.font.get_texture_and_rect(
+            text,
+            "black",
+            text_h,
+        )
+        god.assets.font.font.outline = 0
+        other = constants.INVENTORY_KIND_INPUT
+        if god.player.edit_trajectory_kind == constants.INVENTORY_KIND_INPUT:
+            other = constants.INVENTORY_KIND_OUTPUT
+        help_tex, help_rect = god.assets.font.get_texture_and_rect(
+            f"Middle click to edit {other}\nRight click to select",
+            constants.UI_INFO_DESCR_COL,
+            text_h,
+        )
+        kind_rect = kind_rect.move_to(
+            midbottom=(
+                god.input.mouse_screen.x,
+                god.input.mouse_screen.y - constants.UI_CURSOR_OFFSET * 2,
+            )
+        )
+        kind_tex_outline.draw(None, kind_rect_outline.move_to(center=kind_rect.center))
+        kind_tex.draw(None, kind_rect)
+        help_tex.draw(
+            None,
+            help_rect.move_to(
+                midtop=(
+                    god.windowing.width / 2,
+                    constants.UI_CURSOR_OFFSET,
+                )
+            ),
+        )
 
     def render_craft_queue(self):
         slot_size = god.windowing.width * constants.UI_CRAFT_QUEUE_SLOT_SIZE_MULT
@@ -161,6 +213,8 @@ class WorldUI:
     def render(self):
         self.cursor = constants.CURSOR_IDLE_WORLD
         self.b = god.windowing.width * (constants.UI_BORDER_PERCENT / 100)
+        if god.player.edit_trajectory_bot is not None:
+            self.render_edit_trajectory()
         self.render_stats()
         self.render_craft_queue()
         prev_ray = self.ui_raycast
@@ -201,6 +255,8 @@ class WorldUI:
                         constants.RAYCAST_UI_ITEM,
                         hovering_slot.filter,
                     )
+            if self.inventory.left_panning or self.inventory.right_panning:
+                self.cursor = constants.CURSOR_HOVER
         if self.ui_raycast != prev_ray and not cont.collidepoint(
             god.input.mouse_screen
         ):
@@ -211,14 +267,27 @@ class WorldUI:
             )
         self.raycast_info.render(self.b)
         if self.inventory.floating_slot.source_slot is not None:
+            rect = god.player.inventory_slots[0].hitbox.move_to(
+                center=god.input.mouse_screen
+            )
             self.inventory.render_slot(
-                god.player.inventory_slots[0].hitbox.move_to(
-                    center=god.input.mouse_screen
-                ),
+                rect,
                 self.inventory.floating_slot,
                 None,
                 render_bg=False,
             )
+            if not cont.collidepoint(god.input.mouse_screen):
+                icon = god.assets.icons_texs["drop"]
+                icon.color = constants.GREEN_GOOD
+                icon.alpha = constants.UI_SLOT_GHOST_ALPHA
+                icon.draw(
+                    None,
+                    rect.move_to(
+                        width=rect.w / 1.5,
+                        height=rect.h / 1.5,
+                        center=(rect.centerx, rect.centery + rect.h),
+                    ),
+                )
         pygame.mouse.set_cursor(self.cursor)
 
     def can_interact_world(self):
@@ -228,6 +297,7 @@ class WorldUI:
         if not self.inventory_open:
             self.open_interface = self.crafting_interface
             god.player.set_building_preview(None)
+            god.player.set_edit_trajectory(None)
         else:
             if manual:
                 building = None

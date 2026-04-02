@@ -1,4 +1,5 @@
 {
     "size": [3, 2],
+    "inventory_kind": "in_out",
     "floor_whitelist": ["titanium_platform"]
 }

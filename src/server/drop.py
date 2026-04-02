@@ -36,7 +36,7 @@ class Drop:
             round(self.pos.x, constants.DIGIT_PRECISION),
             round(self.pos.y, constants.DIGIT_PRECISION),
             self.item.uid,
-            self.anim_offset,
+            round(self.anim_offset, constants.DIGIT_PRECISION),
         ]
 
     def frame(self):

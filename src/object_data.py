@@ -8,7 +8,7 @@ from src import constants
 
 class ObjectDataInstanceGetter[T]:
     def __init__(self, cls):
-        self._cls = cls
+        self._cls: type["ObjectData"] = cls
 
     def __getattr__(self, name: str) -> T:
         return self._cls.get(name)
@@ -165,9 +165,16 @@ class ObjectData:
 
 
 class TileOD(ObjectData, type_name="Tile"):
+    DEFAULTS = {"miner_time_s": 0}
+
     item_drop: list[tuple["ItemOD", int]]
-    break_requirements: str
+    break_requirements: list["ItemOD"]
     break_time_s: float
+    miner_time_s: float
+
+    def setup(self):
+        if self.miner_time_s == 0:
+            self.miner_time_s = self.break_time_s
 
     def post_setup(self):
         drop = []
@@ -175,7 +182,9 @@ class TileOD(ObjectData, type_name="Tile"):
             drop.append((ItemOD.get(name_id), amount))
         self.item_drop = drop
         if self.break_requirements is not None:
-            self.break_requirements = ItemOD.get(self.break_requirements)
+            self.break_requirements = [
+                ItemOD.get(req) for req in self.break_requirements
+            ]
 
 
 @dataclass
@@ -253,8 +262,8 @@ class BuildingStateData:
 class BuildingOD(ObjectData, type_name="Building"):
     DEFAULTS = {
         "restore_tile": None,
-        "break_requirements": "pickaxe",
-        "break_time_s": 2,
+        "break_requirements": ["pickaxe", "titanium_pickaxe", "recycler"],
+        "break_time_s": 0,
         "static": True,
         "description": "",
         "display_name": "",
@@ -268,6 +277,8 @@ class BuildingOD(ObjectData, type_name="Building"):
         "states": None,
         "energy_radius": 0,
         "energy_endpoint_type": "machine",
+        "hitbox_multiplier": 1,
+        "inventory_kind": None
     }
 
     size: tuple[int, int]
@@ -279,22 +290,31 @@ class BuildingOD(ObjectData, type_name="Building"):
     interface: bool
     break_time_s: float
     energy_radius: float
+    hitbox_multiplier: float
     altitude_range: tuple[int, int] | None
     floor_whitelist: list["TileOD | BuildingOD"]
     restore_tile: TileOD | None
-    break_requirements: ItemOD
+    break_requirements: list[ItemOD]
     states: dict[str, BuildingStateData]
     energy_endpoint_type: str
+    inventory_kind: str|None
 
     @property
     def item(self):
         return ItemOD.get(self.name_id)
 
+    def setup(self):
+        if self.floor_whitelist is None:
+            self.floor_whitelist = []
+        if self.break_time_s == 0:
+            if self.floor:
+                self.break_time_s = constants.DEFAULT_PLATFORM_BREAK_TIME_S
+            else:
+                self.break_time_s = constants.DEFAULT_BUILDING_BREAK_TIME_S
+
     def post_setup(self):
         if self.restore_tile is not None:
             self.restore_tile = TileOD.get(self.restore_tile)
-        if self.floor_whitelist is None:
-            self.floor_whitelist = []
         if self.states is None:
             self.states = {"": {"default": True, "default_image": True}}
         floor = []
@@ -327,7 +347,7 @@ class BuildingOD(ObjectData, type_name="Building"):
             if default:
                 states["default"] = state
         self.states = states
-        self.break_requirements = ItemOD.get(self.break_requirements)
+        self.break_requirements = [ItemOD.get(req) for req in self.break_requirements]
         self.description = self.item.description
         self.display_name = self.item.display_name
 

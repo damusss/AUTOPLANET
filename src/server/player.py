@@ -36,6 +36,8 @@ class Player:
         self.client_chunks_queue = deque()
         self.client_mouse_pos = pygame.Vector2()
         self.client_mouse_pressing = False
+        self.client_building_preview = None
+        self.client_building_preview_clear_after = 1
         self.client_subscribed_building: "Building" = None
 
     @property
@@ -70,7 +72,7 @@ class Player:
             self.add_to_craft_queue(item_od, amount, True)
         self.add_to_craft_queue(item, 1, False)
 
-    def frame(self, rects, drops_data):
+    def frame(self, rects, drops_data, moving_data):
         self.input_dir.x = pygame.math.lerp(
             self.input_dir.x, self.client_input_dir.x, god.dt * 10, True
         )
@@ -118,10 +120,15 @@ class Player:
         self.pos.y += self.vel.y * god.dt
         self.collisions_y(rects)
 
+        if self.client_building_preview is not None:
+            if self.client_building_preview_clear_after <= 0:
+                self.client_building_preview = None
+            self.client_building_preview_clear_after -= 1
+
         self.handle_mouse_input()
         self.handle_craft_queue()
 
-        self.mail_physics(drops_data)
+        self.mail_physics(drops_data, moving_data)
         if self.inventory.dirty:
             self.mail_stats()
 
@@ -144,29 +151,31 @@ class Player:
             if craft_item.amount <= 0:
                 self.craft_queue.popleft()
 
-    def mail_physics(self, drops_data):
+    def mail_physics(self, drops_data, moving_data):
         other_player_stats = {}
         for player in god.server.world.players.values():
             if player is self:
                 continue
             other_player_stats[player.client.id] = {
-                "pos": [round(p, constants.DIGIT_PRECISION) for p in tuple(player.pos)],
-                "vel": [round(p, constants.DIGIT_PRECISION) for p in tuple(player.vel)],
-                "frame_kind": player.client_frame_kind,
-                "frame_index": player.client_frame_index,
+                "p": [round(p, constants.DIGIT_PRECISION) for p in tuple(player.pos)],
+                "v": [round(p, constants.DIGIT_PRECISION) for p in tuple(player.vel)],
+                "fk": player.client_frame_kind,
+                "fi": player.client_frame_index,
+                "bp": player.client_building_preview,
             }
 
         self.client.conn.mail(
             constants.MAIL_PLAYER_PHYSICS,
-            pos=tuple(self.pos),
-            vel=tuple(self.vel),
-            energy=self.energy,
-            raycast=self.raycast.get_client_data()
+            p=tuple(self.pos),
+            v=tuple(self.vel),
+            e=self.energy,
+            r=self.raycast.get_client_data()
             if self.raycast and self.raycast.type != constants.RAYCAST_EMPTY
             else None,
-            other_players=other_player_stats,
-            drops=drops_data,
-            craft_queue=[item.get_client_data() for item in self.craft_queue],
+            op=other_player_stats,
+            ds=drops_data,
+            ms=moving_data,
+            cq=[item.get_client_data() for item in self.craft_queue],
         )
 
     def mail_stats(self):
@@ -192,7 +201,10 @@ class Player:
                     pygame.time.get_ticks() - self.break_start_time
                     >= self.break_data.object_data.break_time_s * 1000
                 ):
-                    god.world.break_raycast(self.break_data)
+                    god.world.break_raycast(
+                        self.break_data,
+                        self.inventory.slots[constants.INVENTORY_HAND_I].item,
+                    )
                     self.client.conn.mail(constants.MAIL_BREAK_START, time=None)
         else:
             if (
@@ -203,11 +215,12 @@ class Player:
                 if (
                     self.pos.distance_to(self.raycast.hitbox.center)
                     <= constants.PLAYER_REACH_RADIUS
+                    and hasattr(self.raycast.object_data, "break_requirements")
                     and (
                         self.raycast.object_data.break_requirements is None
-                        or self.inventory.slots[constants.INVENTORY_HAND_I].contains(
-                            self.raycast.object_data.break_requirements, 1
-                        )
+                        or self.inventory.slots[
+                            constants.INVENTORY_HAND_I
+                        ].contains_any(self.raycast.object_data.break_requirements, 1)
                     )
                     and self.raycast.object_data.break_time_s > 0
                 ):

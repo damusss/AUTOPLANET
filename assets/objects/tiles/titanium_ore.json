@@ -1,7 +1,7 @@
 {
     "display_name": "Titanium Ore",
-    "description": "",
+    "description": "NOT IMPLEMENTED",
     "item_drop": [["titanium_ore", 1]],
-    "break_requirements": "pickaxe",
+    "break_requirements": ["pickaxe", "titanium_pickaxe"],
     "break_time_s": 1
 }

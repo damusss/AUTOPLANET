@@ -60,6 +60,9 @@ class Slot:
     def contains(self, item: ItemOD, amount):
         return self.item == item and self.amount >= amount
 
+    def contains_any(self, items: list[ItemOD], amount):
+        return any((self.contains(item, amount) for item in items))
+
     def check_filter(self, item: ItemOD):
         if self.filter is None:
             return True
@@ -80,7 +83,7 @@ class Slot:
 
 class RaycastHit:
     def __init__(
-        self, chunk_key, hitbox, type_, object_data, tile_pos, tile_data, building_data
+        self, chunk_key, hitbox, type_, object_data, tile_pos, tile_data, data
     ):
         self.chunk_key = chunk_key
         self.hitbox: pygame.FRect = hitbox
@@ -88,7 +91,7 @@ class RaycastHit:
         self.object_data: TileOD | VegetationOD | BuildingOD | ObjectData = object_data
         self.tile_pos = tile_pos
         self.tile_data = tile_data
-        self.building_data = building_data
+        self.data = data
 
     def get_client_data(self):
         return {
@@ -99,7 +102,7 @@ class RaycastHit:
             "tn": self.object_data.type_name,
             "tp": self.tile_pos,
             "td": self.tile_data,
-            "bd": self.building_data,
+            "d": self.data,
         }
 
     @classmethod
@@ -111,7 +114,7 @@ class RaycastHit:
             ObjectData.get_type(data["tn"]).get(data["uid"]),
             data["tp"],
             data["td"],
-            data["bd"],
+            data["d"],
         )
 
 
@@ -131,7 +134,7 @@ class CraftAvailabilityStatus:
         if intermediate_queue is None:
             intermediate_queue = []
         self.counted_items = counted_items
-        self.intermediate_queue = []
+        self.intermediate_queue = intermediate_queue
         self.availability: str = None
         self.status: str = None
 
@@ -240,6 +243,18 @@ def get_drop_random_pos(hitbox: pygame.FRect):
     )
 
 
+def get_trajectory_chunks(a: pygame.Vector2, b: pygame.Vector2) -> set[str]:
+    p = pygame.Vector2(a)
+    chunks = set()
+    direction = (b - a).normalize()
+    for _ in range(int(a.distance_to(b) / constants.TRAJECTORY_STEP_SIZE) + 1):
+        cpos = get_chunk_pos(p)
+        ckey = get_chunk_key(cpos)
+        chunks.add(ckey)
+        p += direction * constants.TRAJECTORY_STEP_SIZE
+    return chunks
+
+
 def get_chunk_keys_colliding_circle(center, radius, offset=0):
     center = pygame.Vector2(center)
     north = pygame.Vector2(center.x, center.y - radius - offset)
@@ -263,5 +278,22 @@ def get_chunk_keys_colliding_circle(center, radius, offset=0):
     return colliding
 
 
+def mult_rect(rect: pygame.FRect, mult):
+    center = rect.center
+    rect.w *= mult
+    rect.h *= mult
+    rect.center = center
+    return rect
+
+
 def eval_delta(time):
     return pygame.time.get_ticks() - time
+
+
+def get_building_id():
+    return "".join(
+        [
+            random.choice(constants.BUILDING_ID_ALPHABET)
+            for _ in range(constants.BUILDING_ID_LEN)
+        ]
+    )

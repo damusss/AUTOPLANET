@@ -2,7 +2,7 @@ import pygame
 
 from src import constants
 from src.client import god
-from src.client.world.chunk import Chunk
+from src.client.world.chunk import Chunk, BuildingDataHolder
 from src.client.world.camera import Camera
 from src.client.world.world_rendering import WorldRendering
 from src.client.world.player import Player, OtherPlayer
@@ -18,8 +18,10 @@ class WorldState:
         self.camera = Camera()
         self.loaded_chunks: dict[str, Chunk] = {}
         self.visible_lights = [self.player.light]
+        self.no_energy_buildings: list[BuildingDataHolder] = []
         self.other_players: dict[int, OtherPlayer] = {}
         self.drops_data = []
+        self.moving_buildings_data = {}
 
     def other_player_connect(self, player_id, pos, name):
         new_player = self.other_players[player_id] = OtherPlayer(pos, player_id, name)
@@ -46,6 +48,9 @@ class WorldState:
             self.loaded_chunks[ckey] = chunk
             for light in chunk.lights:
                 self.visible_lights.insert(0, light)
+            for bd in chunk.static_buildings:
+                if not bd.has_energy and bd.building_od.need_energy:
+                    self.no_energy_buildings.append(bd)
 
     def unload_chunks(self, chunks):
         for ckey in chunks:
@@ -53,8 +58,16 @@ class WorldState:
                 chunk = self.loaded_chunks.pop(ckey)
                 chunk.unload()
                 for light in chunk.lights:
-                    if light in self.visible_lights:
+                    try:
                         self.visible_lights.remove(light)
+                    except ValueError:
+                        ...
+                for bd in chunk.static_buildings:
+                    if not bd.has_energy and bd.building_od.need_energy:
+                        try:
+                            self.no_energy_buildings.remove(bd)
+                        except ValueError:
+                            ...
 
     def frame(self):
         self.dt = self.clock.tick(constants.CLIENT_FPS) / 1000

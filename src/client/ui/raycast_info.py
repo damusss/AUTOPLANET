@@ -9,7 +9,7 @@ from src.object_data import ItemOD, TileOD, BuildingOD
 from src.client.ui.panel import render_panel_bg
 
 if typing.TYPE_CHECKING:
-    from src.client.ui.ui import UIRaycastHit
+    from src.client.ui.screen_ui import UIRaycastHit
 
 
 class RaycastInfoUI:
@@ -36,6 +36,10 @@ class RaycastInfoUI:
                     bottom, raycast, col_w, cs, self.b, self.b * 2
                 )
             bottom = self.render_object_pos(
+                bottom, raycast, col_w, cs, self.b, self.b * 2
+            )
+        elif raycast.type == constants.RAYCAST_DROP:
+            bottom = self.render_drop_amount(
                 bottom, raycast, col_w, cs, self.b, self.b * 2
             )
         elif raycast.type == constants.RAYCAST_BUILDING:
@@ -293,7 +297,7 @@ class RaycastInfoUI:
         )
         text2_tex, text2_rect = god.assets.font.get_texture_and_rect(
             f"Slot: {raycast.amount}/{raycast.item.stack_size}",
-            constants.UI_RAYCAST_INFO_DESCR_COL,
+            constants.UI_INFO_DESCR_COL,
             text_h,
         )
         box = pygame.Rect(
@@ -385,6 +389,22 @@ class RaycastInfoUI:
             tex.draw(None, rect)
         return box.bottom
 
+    def render_drop_amount(self, top, raycast: shared.RaycastHit, col_w, cs, bb, b):
+        content_w = col_w - b * 2
+        text_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        text_tex, text_rect = god.assets.font.get_texture_and_rect(
+            f"Drop Amount: {raycast.data}", "white", text_h
+        )
+        box = pygame.Rect(
+            god.windowing.width - bb - col_w,
+            top + bb,
+            col_w,
+            b * 2 + text_rect.h,
+        )
+        render_panel_bg(box, cs)
+        text_tex.draw(None, text_rect.move_to(midtop=(box.centerx, box.top + b)))
+        return box.bottom
+
     def render_drops(self, top, raycast: shared.RaycastHit, col_w, cs, bb, b):
         content_w = col_w - b * 2
         subtitle_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
@@ -435,14 +455,14 @@ class RaycastInfoUI:
             )
         if raycast.object_data.break_requirements is not None:
             req_tex, req_rect = god.assets.font.get_texture_and_rect(
-                "Requires", constants.UI_RAYCAST_INFO_DESCR_COL, subtitle_h
+                "Requires (min.)", constants.UI_INFO_DESCR_COL, subtitle_h
             )
             req_rect = req_rect.move_to(midtop=(box.centerx, drop_rect.bottom + bb))
             req_tex.draw(None, req_rect)
             item_tex, item_rect = god.assets.font.get_texture_and_rect(
-                raycast.object_data.break_requirements.display_name,
+                raycast.object_data.break_requirements[0].display_name,
                 constants.GREEN_GOOD
-                if god.player.inventory_slots[constants.INVENTORY_HAND_I].contains(
+                if god.player.inventory_slots[constants.INVENTORY_HAND_I].contains_any(
                     raycast.object_data.break_requirements, 1
                 )
                 else constants.RED_BAD,
@@ -457,7 +477,9 @@ class RaycastInfoUI:
                     )
                 ),
             )
-            god.assets.item_texs[raycast.object_data.break_requirements.name_id].draw(
+            god.assets.item_texs[
+                raycast.object_data.break_requirements[0].name_id
+            ].draw(
                 None,
                 pygame.Rect(0, 0, drop_h, drop_h).move_to(
                     topright=(box.right - b, req_rect.bottom + bb)
@@ -479,16 +501,18 @@ class RaycastInfoUI:
                 <= constants.PLAYER_INTERACT_RADIUS
             ):
                 text = "Right click to interact."
+                if raycast.object_data == BuildingOD.objects.bot:
+                    text += "\nMiddle click to edit trajectory."
             else:
                 text = "Too far to interact."
             click_tex, click_rect = god.assets.font.get_texture_and_rect(
-                text, constants.UI_RAYCAST_INFO_DESCR_COL, text_h, content_w
+                text, constants.UI_INFO_DESCR_COL, text_h, content_w
             )
             to_draw.append((click_tex, click_rect.move_to(midtop=box.midbottom)))
             box.h += click_rect.h + bb
         text_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
         if raycast.object_data.need_energy:
-            if raycast.building_data[2]:
+            if raycast.data[2]:
                 text = "Has energy"
                 col = constants.GREEN_GOOD
             else:
@@ -514,8 +538,8 @@ class RaycastInfoUI:
         world_pos = shared.get_chunk_world_pos(cpos)
         text_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
         text_tex, text_rect = god.assets.font.get_texture_and_rect(
-            f"X: {int(world_pos.x + raycast.tile_pos[0])} Y: {int(world_pos.y + raycast.tile_pos[1])}",
-            constants.UI_RAYCAST_INFO_DESCR_COL,
+            f"X: {int(world_pos.x + raycast.tile_pos[0])} Y: {-int(world_pos.y + raycast.tile_pos[1])}",
+            constants.UI_INFO_DESCR_COL,
             text_h,
         )
         box = pygame.Rect(
@@ -550,7 +574,7 @@ class RaycastInfoUI:
         descr_h = title_h * constants.UI_RAYCAST_INFO_DESCR_MULT
         descr_tex, descr_rect = god.assets.font.get_texture_and_rect(
             raycast.object_data.description,
-            constants.UI_RAYCAST_INFO_DESCR_COL,
+            constants.UI_INFO_DESCR_COL,
             descr_h,
             content_w,
         )
@@ -571,11 +595,11 @@ class RaycastInfoUI:
         object_tex = None
         if raycast.type == constants.RAYCAST_TILE:
             object_tex = god.assets.tile_texs[raycast.object_data.name_id]
-        elif raycast.type == constants.RAYCAST_UI_ITEM:
+        elif raycast.type in [constants.RAYCAST_DROP, constants.RAYCAST_UI_ITEM]:
             object_tex = god.assets.item_texs[raycast.object_data.name_id]
         elif raycast.type == constants.RAYCAST_BUILDING:
             object_tex = god.assets.building_texs[
-                raycast.object_data.states[raycast.building_data[1]].image_name
+                raycast.object_data.states[raycast.data[1]].image_name
             ]
         image_rect = pygame.Rect(
             box.x + b + (content_w / 2 - image_w / 2),

@@ -128,6 +128,12 @@ class Server:
                 available = self.world.can_place_building(
                     BuildingOD.get(mail.building_uid), pygame.Vector2(mail.pos), player
                 )
+                player.client_building_preview = [
+                    mail.pos,
+                    mail.building_uid,
+                    available,
+                ]
+                player.client_building_preview_clear_after = 1
                 player.client.conn.mail(
                     constants.MAIL_BUILDING_AVAILABLE, available=available
                 )
@@ -140,7 +146,17 @@ class Server:
         elif mail.type == constants.MAIL_BUILDING_INTERACT:
             if mail.client_id in self.world.players:
                 player = self.world.players[mail.client_id]
-                god.world.building_interact(player, mail.building_id, mail.unsubscribe)
+                self.world.building_interact(player, mail.building_id, mail.unsubscribe)
+        elif mail.type == constants.MAIL_BOT_TRAJECTORY:
+            if (
+                mail.bot_id in self.world.buildings
+                and mail.target_id in self.world.buildings
+            ):
+                self.world.edit_bot_trajectory(
+                    self.world.buildings[mail.bot_id],
+                    self.world.buildings[mail.target_id],
+                    mail.kind,
+                )
 
     def force_disconnect(self, client: ClientInterface, timeout=False):
         self.clients.pop(client.id)

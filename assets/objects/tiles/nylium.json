@@ -3,5 +3,5 @@
     "description": "Organic soil of the planet.",
     "item_drop": [["nylium_fiber", 1]],
     "break_requirements": null,
-    "break_time_s": 0.35
+    "break_time_s": 0.25
 }

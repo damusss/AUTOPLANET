@@ -3,6 +3,7 @@ import pygame
 from src import shared
 from src import constants
 from src.client import god
+from src.object_data import ItemOD
 from src.client.ui.building import BuildingInterface
 
 
@@ -56,18 +57,109 @@ class HopperInterface(BuildingInterface, name_id="hopper"):
         )
 
 
-class FurnaceInterface(BuildingInterface, name_id="furnace"):
+class BotInterface(BuildingInterface, name_id="bot"):
+    def __init__(self):
+        super().__init__()
+        self.filter: ItemOD = None
+
+    def refresh_data(self, base_data, building_data):
+        self.refresh_inventories_data(base_data, building_data)
+        self.filter = (
+            None
+            if building_data["filter"] is None
+            else ItemOD.get(building_data["filter"])
+        )
+
+    def render(self, b, cont):
+        self.render_title(cont, b)
+        slot_size = god.ui.inventory.slot_size * 2
+        filter_size = god.ui.inventory.slot_size * 1.5
+        slot_rect_1 = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            midright=(cont.centerx - b, cont.centery)
+        )
+        slot_rect_2 = pygame.Rect(0, 0, filter_size, filter_size).move_to(
+            midleft=(cont.centerx + b, cont.centery)
+        )
+        filter_rect = pygame.Rect(0, 0, filter_size, filter_size).move_to(
+            center=(cont.centerx, cont.centery - cont.h / 4)
+        )
+        slot_1 = self.inventories["in"][0]
+        slot_2 = self.inventories["upgrade"][0]
+        hovering = None
+        hovering = god.ui.inventory.render_slot(
+            slot_rect_1,
+            slot_1,
+            hovering,
+            None,
+            ghost=god.ui.inventory.floating_slot.source_slot is slot_1,
+        )
+        hovering = god.ui.inventory.render_slot(
+            slot_rect_2,
+            slot_2,
+            hovering,
+            "upgrade",
+            ghost=god.ui.inventory.floating_slot.source_slot is slot_2,
+        )
+        hovering = god.ui.inventory.render_slot(
+            filter_rect, shared.Slot(self.filter, 0), hovering, "lock", storage=False
+        )
+        return hovering
+
+
+class MinerInterface(BuildingInterface, name_id="miner"):
     def __init__(self):
         super().__init__()
         self.working = False
         self.work_start_time = pygame.time.get_ticks()
-        self.smelt_time = 0
+        self.work_time = 0
 
     def refresh_data(self, base_data, building_data):
         self.refresh_inventories_data(base_data, building_data)
         self.working = building_data["working"]
         self.work_start_time = shared.eval_delta(building_data["work_start_time"])
-        self.smelt_time = building_data["smelt_time"]
+        self.work_time = building_data["work_time"]
+
+    def render(self, b, cont):
+        self.render_title(cont, b)
+        slot_size = god.ui.inventory.slot_size * 2
+        slot_rect_1 = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            midright=(cont.centerx - b, cont.centery)
+        )
+        slot_rect_2 = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            midleft=(cont.centerx + b, cont.centery)
+        )
+        slot_1 = self.inventories["out"][0]
+        slot_2 = self.inventories["out"][1]
+        hovering = None
+        hovering = god.ui.inventory.render_slot(
+            slot_rect_1,
+            slot_1,
+            hovering,
+            None,
+            ghost=god.ui.inventory.floating_slot.source_slot is slot_1,
+        )
+        hovering = god.ui.inventory.render_slot(
+            slot_rect_2,
+            slot_2,
+            hovering,
+            None,
+            ghost=god.ui.inventory.floating_slot.source_slot is slot_2,
+        )
+        return hovering
+
+
+class FurnaceInterface(BuildingInterface, name_id="furnace"):
+    def __init__(self):
+        super().__init__()
+        self.working = False
+        self.work_start_time = pygame.time.get_ticks()
+        self.work_time = 0
+
+    def refresh_data(self, base_data, building_data):
+        self.refresh_inventories_data(base_data, building_data)
+        self.working = building_data["working"]
+        self.work_start_time = shared.eval_delta(building_data["work_start_time"])
+        self.work_time = building_data["work_time"]
 
     def render(self, b, cont):
         self.render_title(cont, b)
@@ -97,6 +189,6 @@ class FurnaceInterface(BuildingInterface, name_id="furnace"):
         icon_size = god.ui.inventory.slot_size * 2
         icon_rect = pygame.Rect(0, 0, icon_size, icon_size).move_to(center=cont.center)
         self.render_icon_progress(
-            fire_icon, icon_rect, self.working, self.work_start_time, self.smelt_time
+            fire_icon, icon_rect, self.working, self.work_start_time, self.work_time
         )
         return hovering

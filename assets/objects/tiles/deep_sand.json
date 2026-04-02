@@ -1,6 +1,6 @@
 {
     "display_name": "Deep Sand",
-    "description": "",
+    "description": "NOT IMPLEMENTED",
     "item_drop": [["deep_sand", 2]],
     "break_requirements": null,
     "break_time_s": 0.5

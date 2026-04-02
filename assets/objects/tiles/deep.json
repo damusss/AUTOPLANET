@@ -1,7 +1,7 @@
 {
     "display_name": "Deep Stone",
-    "description": "",
+    "description": "NOT IMPLEMENTED",
     "item_drop": [["deep_ore", 1]],
-    "break_requirements": "pickaxe",
-    "break_time_s": 0.65
+    "break_requirements": ["pickaxe", "titanium_pickaxe"],
+    "break_time_s": 0.35
 }

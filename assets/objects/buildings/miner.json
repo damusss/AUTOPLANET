@@ -1,9 +1,18 @@
 {
     "size": [2, 2],
-    "floor_whitelist": [
-        "core",
-        "ammonia_deposit",
-        "iron_ore",
-        "copper_ore"
-    ]
+    "floor_whitelist": ["core", "ammonia_deposit", "iron_ore", "copper_ore"],
+    "inventory_kind": "output",
+    "states": {
+        "on": {
+            "default_image": true,
+            "light": {
+                "radius": 5,
+                "intensity": 200,
+                "color": "#ff0053"
+            }
+        },
+        "off": {
+            "default": true
+        }
+    }
 }

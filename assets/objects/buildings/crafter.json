@@ -1,5 +1,6 @@
 {
     "size": [2, 2],
+    "inventory_kind": "in_out",
     "floor_whitelist": [
         "bricks_platform",
         "iron_platform",

@@ -51,8 +51,9 @@ class LightData:
 
 
 class BuildingDataHolder:
-    def __init__(self, data):
+    def __init__(self, data, i_offset=0):
         self.data = data
+        self.i_offset = i_offset
 
     @property
     def id(self) -> str:
@@ -60,7 +61,7 @@ class BuildingDataHolder:
 
     @property
     def building_od(self) -> BuildingOD:
-        return BuildingOD.get(self.data[1])
+        return BuildingOD.get(self.data[1 + self.i_offset])
 
     @property
     def topleft_x(self) -> int:
@@ -90,8 +91,8 @@ class Chunk:
         self.world_rect = pygame.FRect(
             self.world_topleft, (constants.CHUNK_SIZE, constants.CHUNK_SIZE)
         )
-
         self.static_buildings = [BuildingDataHolder(bd) for bd in data["buildings"]]
+        self.energy_conns = data["energy"]
         self.lights = []
         for light in data["lights"]:
             self.lights.append(

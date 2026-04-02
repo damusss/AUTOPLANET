@@ -1,5 +1,6 @@
 {
     "size": [2,2],
+    "inventory_kind": "in_out",
     "states": {
         "on": {
             "default_image": true,

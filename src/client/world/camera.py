@@ -31,21 +31,19 @@ class Camera:
         self.zoom = pygame.math.clamp(self.zoom, *constants.ZOOM_CLAMP)
 
     def to_screen(self, world_pos):
-        world_pos = pygame.Vector2(world_pos)
         return pygame.Vector2(
             god.windowing.width / 2
-            + (world_pos.x - self.pos.x) * god.unit_px * self.zoom,
+            + (world_pos[0] - self.pos.x) * god.unit_px * self.zoom,
             god.windowing.height / 2
-            + (world_pos.y - self.pos.y) * god.unit_px * self.zoom,
+            + (world_pos[1] - self.pos.y) * god.unit_px * self.zoom,
         )
 
     def from_screen(self, screen_pos):
-        screen_pos = pygame.Vector2(screen_pos)
         return pygame.Vector2(
             self.pos.x
-            + (screen_pos.x - god.windowing.width / 2) / (god.unit_px * self.zoom),
+            + (screen_pos[0] - god.windowing.width / 2) / (god.unit_px * self.zoom),
             self.pos.y
-            + (screen_pos.y - god.windowing.height / 2) / (god.unit_px * self.zoom),
+            + (screen_pos[1] - god.windowing.height / 2) / (god.unit_px * self.zoom),
         )
 
     def size_to_screen(self, size):

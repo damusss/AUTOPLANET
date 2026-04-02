@@ -1,7 +1,8 @@
 {
     "display_name": "Iron Ore",
-    "description": "",
+    "description": "NOT IMPLEMENTED",
     "item_drop": [["iron_ore", 1]],
-    "break_requirements": "pickaxe",
-    "break_time_s": 0.8
+    "break_requirements": ["pickaxe", "titanium_pickaxe"],
+    "break_time_s": 0.8,
+    "miner_time_s": 1.5
 }

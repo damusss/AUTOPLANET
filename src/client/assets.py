@@ -134,16 +134,16 @@ class Assets:
             self.big_star_texs.append(self.load_tex(f"stars/{i}.png"))
 
     def load_player(self):
-        self.player_idle_texs = []
-        self.player_run_texs = []
+        self.player_idle_texs: list[Texture] = []
+        self.player_run_texs: list[Texture] = []
         for name in ["idleshort", "idlehigh"]:
             self.player_idle_texs.append(self.load_tex(f"player/idle/{name}.png"))
         for name in ["righthigh", "leftshort", "rightshort", "lefthigh"]:
             self.player_run_texs.append(self.load_tex(f"player/run/{name}.png"))
 
     def load_tiles(self):
-        self.tiles = {}
-        self.tile_texs = {}
+        self.tiles: dict[str, pygame.Surface] = {}
+        self.tile_texs: dict[str, Texture] = {}
         for tile in TileOD.get_all().keys():
             try:
                 surf = self.load(f"tiles/{tile}.png")
@@ -154,8 +154,8 @@ class Assets:
                 self.tile_texs[tile] = self.placeholder_tex
 
     def load_buildings(self):
-        self.buildings = {}
-        self.building_texs = {}
+        self.buildings: dict[str, pygame.Surface] = {}
+        self.building_texs: dict[str, Texture] = {}
         for building in BuildingOD.get_list():
             try:
                 surf = self.load(f"items/{building.name_id}.png")
@@ -191,8 +191,8 @@ class Assets:
                     self.building_texs[state.image_name] = self.placeholder_tex
 
     def load_items(self):
-        self.item_texs = {}
-        self.drop_inflate_percentages = {}
+        self.item_texs: dict[str, Texture] = {}
+        self.drop_inflate_percentages: dict[str, float] = {}
         for item in ItemOD.get_all().keys():
             try:
                 surf = self.load(f"items/{item}.png")
@@ -205,7 +205,7 @@ class Assets:
                 self.item_texs[item] = self.placeholder_tex
 
     def load_building_previews(self):
-        self.building_preview_texs = {}
+        self.building_preview_texs: dict[str, Texture] = {}
         for building in BuildingOD.get_all().keys():
             try:
                 surf = self.load(f"items/{building}.png")
@@ -215,7 +215,7 @@ class Assets:
                 self.building_preview_texs[building] = self.placeholder_tex
 
     def load_icons(self):
-        self.icons_texs = {}
+        self.icons_texs: dict[str, Texture] = {}
         for file in os.listdir("assets/images/icons"):
             name, ext = file.split(".")
             if ext == "svg":
@@ -241,8 +241,10 @@ class Assets:
         self.energy_plant_debug_tex = self.load_tex(plant_surf)
         self.energy_transmitter_debug_tex = self.load_tex(transmitter_surf)
 
+        color = pygame.Color(constants.ENERGY_DEBUG_COLOR)
+        color.a = constants.ENERGY_DEBUG_ALPHA
         self.energy_plant_debug_tex.color = self.energy_transmitter_debug_tex.color = (
-            constants.ENERGY_DEBUG_COLOR
+            color
         )
 
     def load_tex(self, surf_or_file):

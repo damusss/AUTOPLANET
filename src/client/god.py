@@ -1,11 +1,11 @@
 import typing
 
 if typing.TYPE_CHECKING:
-    from client.ui.ui import WorldUI
     from src.client.input import Input
     from src.client.assets import Assets
     from src.client.client import Client
     from src.client.windowing import Windowing
+    from src.client.ui.screen_ui import WorldUI
     from src.client.world.player import Player
     from src.client.world.camera import Camera
     from src.client.world.world_state import WorldState

@@ -2,6 +2,7 @@ import pygame
 
 from src import constants
 from src.client import god
+from src.object_data import BuildingOD
 
 
 class Input:
@@ -16,11 +17,6 @@ class Input:
     def event(self, event: pygame.Event):
         if event.type == pygame.MOUSEWHEEL:
             god.world.camera.zoom_event(event.y)
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_BACKSLASH:
-                god.rendering.debug = not god.rendering.debug
-            if event.key == pygame.K_TAB:
-                god.rendering.energy_debug = not god.rendering.energy_debug
         if event.type == pygame.MOUSEBUTTONUP:
             if event.button == pygame.BUTTON_RIGHT:
                 god.ui.inventory.end_right_pan()
@@ -47,11 +43,58 @@ class Input:
                     and god.player.raycast is not None
                     and god.player.raycast.type == constants.RAYCAST_BUILDING
                 ):
-                    god.client.conn.mail(
-                        constants.MAIL_BUILDING_INTERACT,
-                        building_id=god.player.raycast.building_data[0],
-                        unsubscribe=False,
-                    )
+                    if god.player.edit_trajectory_bot is None:
+                        god.client.conn.mail(
+                            constants.MAIL_BUILDING_INTERACT,
+                            building_id=god.player.raycast.data[0],
+                            unsubscribe=False,
+                        )
+                    else:
+                        available = god.player.edit_trajectory_validate_hover()
+                        if available == constants.BUILDING_STATUS_AVAILABLE:
+                            god.client.conn.mail(
+                                constants.MAIL_BOT_TRAJECTORY,
+                                bot_id=god.player.edit_trajectory_bot,
+                                kind=god.player.edit_trajectory_kind,
+                                target_id=god.player.raycast.data[0],
+                            )
+                            if (
+                                god.player.edit_trajectory_kind
+                                == constants.INVENTORY_KIND_INPUT
+                            ):
+                                god.player.edit_trajectory_kind = (
+                                    constants.INVENTORY_KIND_OUTPUT
+                                )
+                            else:
+                                god.player.edit_trajectory_kind = (
+                                    constants.INVENTORY_KIND_INPUT
+                                )
+
+                elif (
+                    event.button == pygame.BUTTON_MIDDLE
+                    and not god.ui.inventory_open
+                    and god.player.raycast is not None
+                    and god.player.raycast.type == constants.RAYCAST_BUILDING
+                    and god.player.raycast.object_data == BuildingOD.objects.bot
+                ):
+                    if god.player.edit_trajectory_bot == god.player.raycast.data[0]:
+                        god.player.set_edit_trajectory(None)
+                    else:
+                        god.player.set_edit_trajectory(god.player.raycast.data[0])
+                elif (
+                    event.button == pygame.BUTTON_MIDDLE
+                    and not god.ui.inventory_open
+                    and god.player.edit_trajectory_bot is not None
+                ):
+                    if (
+                        god.player.edit_trajectory_kind
+                        == constants.INVENTORY_KIND_INPUT
+                    ):
+                        god.player.edit_trajectory_kind = (
+                            constants.INVENTORY_KIND_OUTPUT
+                        )
+                    else:
+                        god.player.edit_trajectory_kind = constants.INVENTORY_KIND_INPUT
                 else:
                     god.client.conn.mail(
                         constants.MAIL_INPUT_EVENT,
@@ -61,16 +104,23 @@ class Input:
         if event.type in [pygame.KEYDOWN, pygame.KEYUP]:
             if False:
                 god.client.conn.mail(constants.MAIL_INPUT_EVENT, input_type=event.type)
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_BACKSLASH:
+                god.rendering.debug = not god.rendering.debug
+            if event.key == pygame.K_1:
+                god.rendering.energy_debug = not god.rendering.energy_debug
         if event.type == pygame.KEYUP:
             if event.key == pygame.K_e:
                 god.ui.toggle_inventory(True)
             if event.key == pygame.K_ESCAPE:
                 god.player.set_building_preview(None)
+                god.player.set_edit_trajectory(None)
                 god.rendering.energy_debug = False
                 if god.ui.inventory_open:
                     god.ui.toggle_inventory()
             if event.key == pygame.K_q:
                 god.player.set_building_preview(None)
+                god.player.set_edit_trajectory(None)
                 if god.ui.inventory_open:
                     god.ui.inventory.floating_slot.source_slot = None
 

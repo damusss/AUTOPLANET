@@ -10,7 +10,7 @@ from src.client.world.chunk import BuildingDataHolder
 
 
 class BuildingInterface:
-    _registered_interfaces_: dict[str, type[typing.Self]] = {}
+    REGISTERED_INTERFACES: dict[str, type[typing.Self]] = {}
     building_od: BuildingOD
 
     def __init__(self):
@@ -23,12 +23,12 @@ class BuildingInterface:
         }
 
     def __init_subclass__(cls, name_id: str):
-        BuildingInterface._registered_interfaces_[name_id] = cls
+        BuildingInterface.REGISTERED_INTERFACES[name_id] = cls
 
     @staticmethod
     def get_interfaces():
         classes = {}
-        for name, cls in BuildingInterface._registered_interfaces_.items():
+        for name, cls in BuildingInterface.REGISTERED_INTERFACES.items():
             obj = cls()
             obj.building_od = BuildingOD.get(name)
             classes[obj.building_od] = obj

@@ -66,6 +66,9 @@ class InventoryInterface:
         self.pan_source = None
 
     def right_pan(self):
+        if self.pan_source is None:
+            self.end_right_pan()
+            return
         if (
             self.floating_slot is None
             or self.floating_slot.source_slot is None
@@ -94,6 +97,9 @@ class InventoryInterface:
                             )
 
     def left_pan(self):
+        if self.pan_source is None:
+            self.end_left_pan()
+            return
         for i, slot in enumerate(self.pan_source):
             if i in self.left_panned_slot_i:
                 continue

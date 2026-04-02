@@ -21,6 +21,7 @@ class Chunk:
         )
         self.refresh_pending = False
         self.energy_providers: set[EnergyProvider] = set()
+        self.moving_building_ids = set()
         self.building_ids = set()
         self.building_floor_hitboxes: list[pygame.FRect] = []
         self.building_ids_table: dict[tuple[int, int], str] = {}
@@ -62,20 +63,11 @@ class Chunk:
             self.generate_dusts()
             self.generate_big_star()
 
-    def get_cave_value(self, cx, wy):
-        return terrain.get_noise_value(
-            self.world_topleft.x + cx + god.world.seed_caves,
-            -wy + god.world.seed_caves,
-            terrain.CAVE_NOISE,
-        )
-
     def generate_tiles(self):
         left = terrain.get_surface_height(-1 + self.world_topleft.x)
         current = terrain.get_surface_height(0 + self.world_topleft.x)
         right = terrain.get_surface_height(1 + self.world_topleft.x)
         for cx in range(constants.CHUNK_SIZE):
-            can_generate = False
-            can_generate_caves = False
             height = current
             # erase lonely 1-wide tiles at the top of the heels (NOT WORKING)
             if left == right and (current - right) == 1:
@@ -85,43 +77,20 @@ class Chunk:
             right = terrain.get_surface_height(cx + 2 + self.world_topleft.x)
             for cy in range(constants.CHUNK_SIZE):
                 wy = self.world_topleft.y + cy
-                if wy == height:
-                    can_generate = True
-                    tile_type = TileOD.objects.nylium_surface
-                elif wy > height:
-                    if wy < height + constants.NYLIUM_HEIGHT:
-                        can_generate = True
-                        tile_type = TileOD.objects.nylium
-                    else:
-                        can_generate = True
-                        if (
-                            wy
-                            > height
-                            + constants.NYLIUM_HEIGHT
-                            + constants.UNDERGROUND_OFFSET
-                        ):
-                            can_generate_caves = True
-                        tile_type = TileOD.objects.core
-
-                if can_generate:
-                    if (
-                        not can_generate_caves
-                        or self.get_cave_value(cx, wy) > constants.NOISE_IS_BLOCK
-                    ):
-                        tile_solid = 1
-                    else:
-                        tile_solid = 0
-                    self.tiles_mat[cy * constants.CHUNK_SIZE + cx] = [
-                        tile_type.uid,
-                        tile_solid,
-                        0,
-                    ]
-                    if tile_solid:
-                        rect = pygame.FRect(
-                            self.world_topleft.x + cx, self.world_topleft.y + cy, 1, 1
-                        )
-                        self.tile_hitboxes.append(rect)
-                        self.tile_hitboxes_table[(cx, cy)] = rect
+                biome_handler, rel_y = terrain.get_biome_handler(wy, height)
+                if biome_handler is not None:
+                    tile_data = biome_handler(rel_y, cx + self.world_topleft.x)
+                    if tile_data is not None:
+                        self.tiles_mat[cy * constants.CHUNK_SIZE + cx] = tile_data
+                        if tile_data[1]:
+                            rect = pygame.FRect(
+                                self.world_topleft.x + cx,
+                                self.world_topleft.y + cy,
+                                1,
+                                1,
+                            )
+                            self.tile_hitboxes.append(rect)
+                            self.tile_hitboxes_table[(cx, cy)] = rect
 
     def generate_stars(self):
         for cx in range(constants.CHUNK_SIZE):
@@ -195,4 +164,17 @@ class Chunk:
                 for bid in self.building_ids
                 if bid in god.world.buildings
             ],
+            "energy": sum(
+                (
+                    [
+                        conn.get_client_data()
+                        for conn in god.world.buildings[bid].ext.energy_conns[
+                            : constants.MAX_CLIENT_CONNECTIONS_PER_BUILDING
+                        ]
+                    ]
+                    for bid in self.building_ids
+                    if bid in god.world.buildings
+                ),
+                start=[],
+            ),
         }
