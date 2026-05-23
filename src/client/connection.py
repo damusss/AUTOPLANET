@@ -57,8 +57,13 @@ class SocketConnection(Connection):
         if self.connected:
             return
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect((constants.SOCKET_ADDR, constants.SOCKET_PORT))
+        self.socket.connect(
+            (constants.CLIENT_SOCKET_ADDR, constants.CLIENT_SOCKET_PORT)
+        )
         self.socket.setblocking(False)
+        shared.log(
+            f"[C] Client socket initialized and bound to {constants.CLIENT_SOCKET_ADDR}:{constants.CLIENT_SOCKET_PORT}"
+        )
 
     def mail_disconnect(self):
         super().mail_disconnect()
@@ -80,9 +85,9 @@ class SocketConnection(Connection):
                         cur_data = self.buffer + cur_data
                         self.buffer = ""
                         sock = json.loads(cur_data)
-                        self.client.mailbox.put(
-                            shared.Mail(sock["type"], sock["client_id"], **sock["data"])
-                        )
+                        mail = shared.Mail(sock["type"], sock["client_id"], **sock["data"])
+                        if mail.valid:
+                            self.client.mailbox.put(mail)
                     self.buffer += data
         except BlockingIOError:
             ...

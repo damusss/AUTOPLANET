@@ -32,6 +32,7 @@ class OtherPlayer(PlayerLike):
         self.frame_index = 0
         self.texture = None
         self.building_preview: list = None
+        self.break_data: tuple[int, tuple[float, float], float] | None = None
         self.light = LightData(
             f"other_player_{player_id}",
             constants.PLAYER_LIGHT_RADIUS,
@@ -97,7 +98,8 @@ class Player(PlayerLike):
     def set_building_preview(self, preview):
         if preview is None:
             self.building_preview = None
-            god.rendering.energy_debug = False
+            if not god.input.manual_energy_debug:
+                god.rendering.energy_debug = False
         else:
             self.building_preview = preview
             self.building_available = constants.BUILDING_STATUS_OBSTRUCTED
@@ -107,6 +109,7 @@ class Player(PlayerLike):
                 != constants.ENDPOINT_MACHINE
             ):
                 god.rendering.energy_debug = True
+                god.input.manual_energy_debug = False
 
     def set_edit_trajectory(self, bid):
         if bid is None:
@@ -207,3 +210,6 @@ class Player(PlayerLike):
             )
             if self.count_item(self.building_preview.item) < 1:
                 self.set_building_preview(None)
+        if self.edit_trajectory_bot is not None:
+            if self.edit_trajectory_bot not in god.world.moving_buildings_data:
+                self.set_edit_trajectory(None)

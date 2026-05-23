@@ -42,37 +42,36 @@ class Client:
 
     def handle_mail(self, mail: shared.Mail):
         self.last_mail = pygame.time.get_ticks()
-        if mail.type == constants.MAIL_CONNECTION_ACCEPTED:
+        if mail.compare(constants.MAIL_CONNECTION_ACCEPTED):
             self.conn.connection_accepted(mail)
             self.enter_state(self.world)
-            print(
+            shared.log(
                 f"[C:{self.id}] Connected to server 'local' (client name={self.name})"
             )
             for player in mail.other_players:
                 self.world.other_player_connect(player[0], player[1], player[2])
-        elif mail.type == constants.MAIL_FORCE_DISCONNECT:
+        elif mail.compare(constants.MAIL_FORCE_DISCONNECT):
             self.conn.force_disconnected()
             self.enter_state(self.main_menu)
-            print(
+            shared.log(
                 f"[C:/{self.id}] Kicked from server 'local' (client name={self.name})"
             )
-        elif mail.type == constants.MAIL_PLAYER_PHYSICS:
+        elif mail.compare(constants.MAIL_PLAYER_PHYSICS):
             self.world.player.pos = pygame.Vector2(mail.p)
             self.world.player.vel = pygame.Vector2(mail.v)
             self.world.player.energy = mail.e
             self.world.player.raycast = (
-                shared.RaycastHit.from_client_data(mail.r)
-                if mail.r
-                else None
+                shared.RaycastHit.from_client_data(mail.r) if mail.r else None
             )
             self.world.drops_data = mail.ds
             self.world.moving_buildings_data = mail.ms
             self.world.player.craft_queue = [
-                shared.CraftQueueItem.from_client_data(data)
-                for data in mail.cq
+                shared.CraftQueueItem.from_client_data(data) for data in mail.cq
             ]
 
             for other_player_id, other_player_data in mail.op.items():
+                if mail.missing_fields("p", "v", "fk", "fi", "bp", "ba", data=other_player_data):
+                    continue
                 other_player_id = int(other_player_id)
                 if other_player_id not in self.world.other_players:
                     continue
@@ -82,26 +81,35 @@ class Client:
                 other_player.frame_kind = other_player_data["fk"]
                 other_player.frame_index = other_player_data["fi"]
                 other_player.building_preview = other_player_data["bp"]
+                if other_player_data["ba"] is None:
+                    other_player.break_data = None
+                else:
+                    other_player.break_data = [
+                        shared.eval_delta(other_player_data["ba"][0]),
+                        other_player_data["ba"][1],
+                        other_player_data["ba"][2],
+                        other_player_data["ba"][3],
+                    ]
 
-        elif mail.type == constants.MAIL_PLAYER_STATS:
+        elif mail.compare(constants.MAIL_PLAYER_STATS):
             self.world.player.health = mail.health
             self.world.player.update_inventory(mail.inventory)
-        elif mail.type == constants.MAIL_CHUNK_LOAD:
+        elif mail.compare(constants.MAIL_CHUNK_LOAD):
             self.world.load_chunks(mail.chunks, mail.refresh)
-        elif mail.type == constants.MAIL_CHUNK_UNLOAD:
+        elif mail.compare(constants.MAIL_CHUNK_UNLOAD):
             self.world.unload_chunks(mail.chunk_keys)
-        elif mail.type == constants.MAIL_OTHER_PLAYER_CONNECT:
+        elif mail.compare(constants.MAIL_OTHER_PLAYER_CONNECT):
             self.world.other_player_connect(mail.player_id, mail.pos, mail.name)
-        elif mail.type == constants.MAIL_OTHER_PLAYER_DISCONNECT:
+        elif mail.compare(constants.MAIL_OTHER_PLAYER_DISCONNECT):
             self.world.other_player_disconnect(mail.player_id)
-        elif mail.type == constants.MAIL_BREAK_START:
+        elif mail.compare(constants.MAIL_BREAK_START):
             time = mail.time
             if time == "now":
                 time = pygame.time.get_ticks()
             self.world.player.break_start_time = time
-        elif mail.type == constants.MAIL_BUILDING_AVAILABLE:
+        elif mail.compare(constants.MAIL_BUILDING_AVAILABLE_RESPONSE):
             self.world.player.building_available = mail.available
-        elif mail.type == constants.MAIL_BUILDING_INTERACT:
+        elif mail.compare(constants.MAIL_REFRESH_BUILDING_INTERACT):
             if mail.broken:
                 if god.ui.open_interface:
                     god.ui.toggle_inventory()
@@ -119,9 +127,9 @@ class Client:
     def quit(self):
         self.abort = True
         self.disconnect()
-        if constants.OFFLINE_LOCALHOST:
+        if not constants.MULTIPLAYER:
             self.conn.mail(constants.MAIL_ABORT)
-        print(
+        shared.log(
             f"[C:/{self.id}] Disconnected from server 'local' (client name={self.name})"
         )
 
@@ -131,7 +139,7 @@ class Client:
             and pygame.time.get_ticks() - self.last_mail
             >= constants.CLIENT_TIMEOUT * 1000
         ):
-            print(f"[C:{self.id}] Server timeout, disconnecting")
+            shared.log(f"[C:{self.id}] Server timeout, disconnecting")
             self.disconnect()
             return
 
@@ -141,21 +149,19 @@ class Client:
             if signal == "abort":
                 self.quit()
                 return
-            if event.type == pygame.USEREVENT:
-                print("user", event)
 
             self.input.event(event)
             self.state.event(event)
 
             if event.type == pygame.KEYDOWN and event.key == pygame.K_c:  # temp
-                if constants.OFFLINE_LOCALHOST:
+                if not constants.MULTIPLAYER:
                     if self.offline_localhost_server_process is None:
                         self.offline_localhost_server_process = subprocess.Popen(
                             f"python main_server.py -client_PID {os.getpid()}"
                         )
 
                 self.conn.mail_connect()
-                print(f"[C:{self.name}] Sent connection request to server 'local'")
+                shared.log(f"[C:{self.name}] Sent connection request to server 'local'")
 
             elif event.type == pygame.WINDOWRESIZED:
                 self.state.window_resized()

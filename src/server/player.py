@@ -162,6 +162,16 @@ class Player:
                 "fk": player.client_frame_kind,
                 "fi": player.client_frame_index,
                 "bp": player.client_building_preview,
+                "ba": [
+                    shared.eval_delta(player.break_start_time),
+                    player.break_data.hitbox.center,
+                    player.break_data.object_data.break_time_s,
+                    [player.break_data.object_data.uid, player.break_data.data[0]]
+                    if player.break_data.type == constants.RAYCAST_BUILDING
+                    else None,
+                ]
+                if player.break_data is not None
+                else None,
             }
 
         self.client.conn.mail(

@@ -24,6 +24,9 @@ typedef struct
 } TimerList;
 
 static TimerList *global_timers = NULL;
+static int paused = 0;
+static double pause_start_real_time = 0.0;
+static double total_paused_time = 0.0;
 
 // C functions
 static double get_time()
@@ -38,6 +41,16 @@ static double get_time()
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec + (double)ts.tv_nsec / 1000000000.0;
 #endif
+}
+
+static double get_game_time()
+{
+    double real_time = get_time();
+    if (paused)
+    {
+        return pause_start_real_time - total_paused_time;
+    }
+    return real_time - total_paused_time;
 }
 
 static TimerList *
@@ -93,7 +106,7 @@ timerc_add(PyObject *self, PyObject *args, PyObject *kwargs)
     }
 
     Timer timer;
-    timer.start = get_time();
+    timer.start = get_game_time();
     timer.cooldown = cooldown;
     timer.callback = callback;
     Py_XINCREF(callback);
@@ -102,10 +115,32 @@ timerc_add(PyObject *self, PyObject *args, PyObject *kwargs)
 }
 
 static PyObject *
+timerc_pause(PyObject *self, PyObject *null)
+{
+    if (!paused)
+    {
+        paused = 1;
+        pause_start_real_time = get_time();
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+timerc_resume(PyObject *self, PyObject *null)
+{
+    if (paused)
+    {
+        paused = 0;
+        total_paused_time += (get_time() - pause_start_real_time);
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject *
 timerc_frame(PyObject *self, PyObject *null)
 {
     int len = global_timers->len;
-    double now = get_time();
+    double now = get_game_time();
     for (int i = 0; i < len; i++)
     {
         if ((now - global_timers->timers[i].start) >= global_timers->timers[i].cooldown)
@@ -158,6 +193,8 @@ timerc_free(void *module)
 static PyMethodDef timerc_methods[] = {
     {"frame", (PyCFunction)timerc_frame, METH_NOARGS, NULL},
     {"add", (PyCFunction)timerc_add, METH_VARARGS | METH_KEYWORDS, NULL},
+    {"pause", (PyCFunction)timerc_pause, METH_NOARGS, NULL},
+    {"resume", (PyCFunction)timerc_resume, METH_NOARGS, NULL},
     {NULL, NULL, 0, NULL}};
 
 static struct PyModuleDef timerc_module = {

@@ -65,9 +65,10 @@ class RaycastInfoUI:
                             bottom, raycast, col_w, cs, self.b, self.b * 2
                         )
             else:
-                bottom = self.render_item_amount(
-                    bottom, raycast, col_w, cs, self.b, self.b * 2
-                )
+                if god.ui.overlay_menu_func is None:
+                    bottom = self.render_item_amount(
+                        bottom, raycast, col_w, cs, self.b, self.b * 2
+                    )
             if raycast.item.smelt_result is not None:
                 bottom = self.render_item_smelt_result(
                     bottom, raycast, col_w, cs, self.b, self.b * 2
@@ -98,9 +99,12 @@ class RaycastInfoUI:
         title_h = content_w * (constants.UI_RAYCAST_INFO_MSG_H_MULT)
         text = "Unknown Slot Filter"
         if raycast.filter[0] == constants.INVENTORY_FILTER_CATEGORY:
-            text = f"Slot Whitelist: {', '.join([constants.ITEM_CATEGORY_NAMES[cat] for cat in raycast.filter[1]])}"
+            text = f"Slot Category Whitelist: {', '.join([constants.ITEM_CATEGORY_NAMES[cat] for cat in raycast.filter[1]])}"
         elif raycast.filter[0] == constants.INVENTORY_FILTER_READONLY:
             text = "Slot is read-only."
+        elif raycast.filter[0] == constants.INVENTORY_FILTER_WHITELIST:
+            # TEMPORARY
+            text = f"Slot Item Whitelist: {', '.join([ItemOD.get(name).display_name for name in raycast.filter[1]])}"
         title_tex, title_rect = god.assets.font.get_texture_and_rect(
             text, "white", title_h, content_w
         )

@@ -1,3 +1,4 @@
+import math
 import random
 
 import pygame
@@ -120,11 +121,31 @@ class RaycastHit:
 
 class Mail:
     def __init__(self, type, client_id, **data):
-        self.type = type
+        self.type = type[0]
         self.client_id = client_id
         self.data: dict = data
+        self.valid = all((field in self.data for field in type[1]))
+        if not self.valid:
+            log(
+                f"[ERR] Invalid mail for type {self.type}. Missing fields: {[field for field in type[1] if field not in self.data]}"
+            )
         for attr, val in self.data.items():
             setattr(self, attr, val)
+
+    def compare(self, type):
+        return self.type == type[0]
+
+    def missing_fields(self, *required_fields, cont_data=None):
+        data = cont_data if cont_data is not None else self.data
+        result = any((field not in self.data for field in required_fields))
+        if result:
+            cont_str = ""
+            if cont_data is not None:
+                cont_str = f" in data={cont_data}"
+            log(
+                f"[ERR] Invalid mail for type {self.type}. Missing fields: {[field for field in required_fields if field not in data]}{cont_str}"
+            )
+        return result
 
 
 class CraftAvailabilityStatus:
@@ -246,7 +267,9 @@ def get_drop_random_pos(hitbox: pygame.FRect):
 def get_trajectory_chunks(a: pygame.Vector2, b: pygame.Vector2) -> set[str]:
     p = pygame.Vector2(a)
     chunks = set()
-    direction = (b - a).normalize()
+    direction = b - a
+    if direction.magnitude() != 0:
+        direction = (b - a).normalize()
     for _ in range(int(a.distance_to(b) / constants.TRAJECTORY_STEP_SIZE) + 1):
         cpos = get_chunk_pos(p)
         ckey = get_chunk_key(cpos)
@@ -297,3 +320,22 @@ def get_building_id():
             for _ in range(constants.BUILDING_ID_LEN)
         ]
     )
+
+
+def get_float_anim(height, time_mult, offset):
+    return ((math.sin(pygame.time.get_ticks() * time_mult + offset)) + 1) / 2 * height
+
+
+def other_kind(name, strip=False):
+    if name == "in":
+        return "out"
+    if name == "input":
+        return "out" if strip else "output"
+    if name == "out":
+        return "in"
+    if name == "output":
+        return "in" if strip else "input"
+
+
+def log(*args, **kwargs):
+    print(*args, **kwargs)

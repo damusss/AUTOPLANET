@@ -21,6 +21,20 @@ class Bot(MovingBuildingExt, name_id="bot"):
         self.inventories["upgrade"] = BuildingInventory(self, self.upgrade_slot)
         self.filter: ItemOD | None = None
 
+    def on_client_config(self, mail):
+        if mail.missing_fields("filter_uid"):
+            return
+        if mail.filter_uid is None:
+            self.filter = None
+            self.slot.filter = None
+        else:
+            self.filter = ItemOD.get(mail.filter_uid)
+            self.slot.filter = [
+                constants.INVENTORY_FILTER_WHITELIST,
+                [self.filter.name_id],
+            ]
+        self.building.refresh_interact()
+
     def get_display_data(self):
         return None if self.slot.empty else self.slot.item.uid
 
@@ -46,6 +60,8 @@ class Bot(MovingBuildingExt, name_id="bot"):
                 target_inv.remove(item, will_take_amount)
                 self.inventory.add(item, will_take_amount)
             else:
+                if not self.slot.check_filter(self.slot.item):
+                    return
                 can_take_amount = self.slot.item.stack_size - self.slot.amount
                 will_take_amount = min(
                     can_take_amount, target_inv.count(self.slot.item)

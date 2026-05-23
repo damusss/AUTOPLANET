@@ -51,9 +51,10 @@ class LightData:
 
 
 class BuildingDataHolder:
-    def __init__(self, data, i_offset=0):
+    def __init__(self, data, id_=None):
         self.data = data
-        self.i_offset = i_offset
+        if id_ is not None:
+            self.data.insert(0, id_)
 
     @property
     def id(self) -> str:
@@ -61,7 +62,7 @@ class BuildingDataHolder:
 
     @property
     def building_od(self) -> BuildingOD:
-        return BuildingOD.get(self.data[1 + self.i_offset])
+        return BuildingOD.get(self.data[1])
 
     @property
     def topleft_x(self) -> int:
@@ -92,7 +93,13 @@ class Chunk:
             self.world_topleft, (constants.CHUNK_SIZE, constants.CHUNK_SIZE)
         )
         self.static_buildings = [BuildingDataHolder(bd) for bd in data["buildings"]]
-        self.energy_conns = data["energy"]
+        self.energy_conns = {}
+        for a, b, energy in data["energy"]:
+            self.energy_conns[frozenset({tuple(a), tuple(b)})] = energy
+        self.trajectory_conns = set()
+        for a, b in data["traj"]:
+            key = (tuple(a), tuple(b))
+            self.trajectory_conns.add(key)
         self.lights = []
         for light in data["lights"]:
             self.lights.append(

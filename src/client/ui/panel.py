@@ -4,6 +4,44 @@ from src import constants
 from src.client import god
 
 
+class IconButton:
+    def __init__(self, icon_name, corner_size, icon_mult=1):
+        self.icon_name = icon_name
+        self.icon_mult = icon_mult
+        self.corner_size = corner_size
+        self.hitbox = pygame.Rect()
+
+    def clicked(self, event: pygame.Event):
+        return event.button == pygame.BUTTON_LEFT and self.hitbox.collidepoint(
+            event.pos
+        )
+
+    def render(self, rect: pygame.Rect):
+        self.hitbox = rect
+        cs = self.corner_size
+        hover = rect.collidepoint(god.input.mouse_screen)
+        if isinstance(self.corner_size, str):
+            cs = min(self.hitbox.w, self.hitbox.h) * float(self.corner_size)
+        render_panel(
+            rect,
+            cs,
+            outline_alpha=constants.OPAQUE
+            if hover
+            else constants.UI_PANEL_OUTLINE_ALPHA,
+        )
+        icon = god.assets.icons_texs[self.icon_name]
+        icon.alpha = constants.UI_ICON_BTN_ALPHA
+        icon.draw(
+            None,
+            pygame.Rect(0, 0, rect.w * self.icon_mult, rect.h * self.icon_mult).move_to(
+                center=rect.center
+            ),
+        )
+        icon.alpha = constants.OPAQUE
+        if hover:
+            god.ui.cursor = constants.CURSOR_HOVER
+
+
 def render_panel_bg(
     rect, corner_size, bg_alpha=constants.UI_PANEL_BG_ALPHA, bg_color="black"
 ):

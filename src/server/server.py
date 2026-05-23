@@ -7,6 +7,7 @@ from src import shared
 from src import constants
 from src import object_data
 from src.server import god
+from src.timerc import timerc
 from src.object_data import BuildingOD
 from src.server.world import World
 from src.server.connection import (
@@ -38,18 +39,29 @@ class Server:
         self.conn = SocketServerConnection(self)
         self.client_PID = client_PID
         self.last_client_check = pygame.time.get_ticks()
+        self.frozen = False
         if self.client_PID is not None:
-            print(
+            shared.log(
                 f"[S] Server started with offline localhost mode (client PID={self.client_PID})"
             )
         else:
-            print("[S] Server started with multiplayer mode")
+            shared.log("[S] Server started with multiplayer mode")
+
+    def freeze(self):
+        self.frozen = True
+        timerc.pause()
+        shared.log("[S] Server frozen (no clients connected)")
+
+    def unfreeze(self):
+        self.frozen = False
+        timerc.resume()
+        shared.log("[S] Server unfrozen")
 
     def handle_mail(self, mail: shared.Mail):
-        if mail.type == constants.MAIL_ABORT:
+        if mail.compare(constants.MAIL_ABORT):
             if self.client_PID is not None:
                 self.abort = True
-        elif mail.type == constants.MAIL_CONNECT:
+        elif mail.compare(constants.MAIL_CONNECT):
             id_ = self.free_client_id
             self.free_client_id += 1
             client = ClientInterface(id_, mail.data, self)
@@ -67,8 +79,10 @@ class Server:
             client.conn.mail(
                 constants.MAIL_CONNECTION_ACCEPTED, other_players=other_players
             )
-            print(f"[S] Client connection accepted (ID={client.id})")
-        elif mail.type == constants.MAIL_DISCONNECT:
+            if self.frozen:
+                self.unfreeze()
+            shared.log(f"[S] Client connection accepted (ID={client.id})")
+        elif mail.compare(constants.MAIL_DISCONNECT):
             if mail.client_id in self.clients:
                 client = self.clients[mail.client_id]
                 self.clients.pop(mail.client_id)
@@ -77,19 +91,22 @@ class Server:
                     player.client.conn.mail(
                         constants.MAIL_OTHER_PLAYER_DISCONNECT, player_id=client.id
                     )
-                print(f"[S] Client disconnected (name={client.name}, ID={client.id})")
-        elif mail.type == constants.MAIL_HEARTBEAT:
+                shared.log(f"[S] Client disconnected (name={client.name}, ID={client.id})")
+            if len(self.clients) <= 0:
+                self.freeze()
+        elif mail.compare(constants.MAIL_HEARTBEAT):
             if mail.client_id in self.clients:
                 self.clients[mail.client_id].heartbeat()
-        elif mail.type == constants.MAIL_NAME:
+        elif mail.compare(constants.MAIL_NAME):
+
             if mail.client_id in self.clients:
                 self.clients[mail.client_id].name = mail.name
-        elif mail.type == constants.MAIL_INPUT_DIR:
+        elif mail.compare(constants.MAIL_INPUT_DIR):
             if mail.client_id in self.clients:
                 self.world.players[mail.client_id].client_input_dir = pygame.Vector2(
                     mail.dir
                 )
-        elif mail.type == constants.MAIL_INPUT_EVENT:
+        elif mail.compare(constants.MAIL_INPUT_EVENT):
             if mail.client_id in self.world.players:
                 player = self.world.players[mail.client_id]
                 if (
@@ -103,26 +120,26 @@ class Server:
                 ):
                     player.client_mouse_pressing = False
                 # handle key event when needed. no key reported, but action to allow for key binds
-        elif mail.type == constants.MAIL_MOUSE_POS:
+        elif mail.compare(constants.MAIL_MOUSE_POS):
             if mail.client_id in self.world.players:
                 player = self.world.players[mail.client_id]
                 player.client_mouse_pos = pygame.Vector2(mail.pos)
-        elif mail.type == constants.MAIL_ANIMATION_UPDATE:
+        elif mail.compare(constants.MAIL_ANIMATION_UPDATE):
             if mail.client_id in self.world.players:
                 player = self.world.players[mail.client_id]
                 player.client_frame_kind = mail.frame_kind
                 player.client_frame_index = mail.frame_index
-        elif mail.type == constants.MAIL_INVENTORY_ACTION:
+        elif mail.compare(constants.MAIL_INVENTORY_ACTION):
             if mail.client_id in self.world.players:
                 player = self.world.players[mail.client_id]
                 player.inventory.client_action(
                     mail.action, mail.source, mail.dest, mail.amount
                 )
-        elif mail.type == constants.MAIL_CRAFT_REQUEST:
+        elif mail.compare(constants.MAIL_CRAFT_REQUEST):
             if mail.client_id in self.world.players:
                 player = self.world.players[mail.client_id]
-                player.try_craft_item(mail.item)
-        elif mail.type == constants.MAIL_BUILDING_AVAILABLE:
+                player.try_craft_item(mail.item_uid)
+        elif mail.compare(constants.MAIL_BUILDING_AVAILABLE):
             if mail.client_id in self.world.players:
                 player = self.world.players[mail.client_id]
                 available = self.world.can_place_building(
@@ -133,36 +150,41 @@ class Server:
                     mail.building_uid,
                     available,
                 ]
-                player.client_building_preview_clear_after = 1
+                player.client_building_preview_clear_after = 10
                 player.client.conn.mail(
-                    constants.MAIL_BUILDING_AVAILABLE, available=available
+                    constants.MAIL_BUILDING_AVAILABLE_RESPONSE, available=available
                 )
-        elif mail.type == constants.MAIL_PLACE_BUILDING:
+        elif mail.compare(constants.MAIL_PLACE_BUILDING):
             if mail.client_id in self.world.players:
                 player = self.world.players[mail.client_id]
                 self.world.place_building(
                     BuildingOD.get(mail.building_uid), pygame.Vector2(mail.pos), player
                 )
-        elif mail.type == constants.MAIL_BUILDING_INTERACT:
+        elif mail.compare(constants.MAIL_BUILDING_INTERACT):
             if mail.client_id in self.world.players:
                 player = self.world.players[mail.client_id]
                 self.world.building_interact(player, mail.building_id, mail.unsubscribe)
-        elif mail.type == constants.MAIL_BOT_TRAJECTORY:
-            if (
-                mail.bot_id in self.world.buildings
-                and mail.target_id in self.world.buildings
+        elif mail.compare(constants.MAIL_BOT_TRAJECTORY):
+            if mail.bot_id in self.world.buildings and (
+                mail.target_id in self.world.buildings or mail.target_id is None
             ):
                 self.world.edit_bot_trajectory(
                     self.world.buildings[mail.bot_id],
-                    self.world.buildings[mail.target_id],
+                    self.world.buildings[mail.target_id]
+                    if mail.target_id is not None
+                    else None,
                     mail.kind,
                 )
+        elif mail.compare(constants.MAIL_BUILDING_CONFIG):
+            if mail.building_id in self.world.buildings:
+                building = self.world.buildings[mail.building_id]
+                building.ext.on_client_config(mail)
 
     def force_disconnect(self, client: ClientInterface, timeout=False):
         self.clients.pop(client.id)
         self.world.player_disconnect(client)
         client.conn.mail(constants.MAIL_FORCE_DISCONNECT)
-        print(
+        shared.log(
             f"[S] {'Client timeout' if timeout else 'Kicked client'} (name={client.name}, ID={client.id})"
         )
 
@@ -178,11 +200,14 @@ class Server:
                 ):
                     self.last_client_check = pygame.time.get_ticks()
                     if not psutil.pid_exists(self.client_PID):
-                        print("[S] Offline client process not found, shutting down")
+                        shared.log("[S] Offline client process not found, shutting down")
                         self.abort = True
             while self.mailbox.qsize() > 0:
                 self.handle_mail(self.mailbox.get())
-            self.world.frame()
+            if not self.frozen:
+                self.world.frame()
+            else:
+                self.world.dt = god.dt = 0
             self.conn.frame()
             for client in list(self.clients.values()):
                 if (

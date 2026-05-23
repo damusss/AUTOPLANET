@@ -23,7 +23,7 @@ class CraftingInterface:
         for item, hitbox in self.item_hitboxes.items():
             if hitbox.collidepoint(event.pos):
                 item_od = ItemOD.get(item)
-                god.client.conn.mail(constants.MAIL_CRAFT_REQUEST, item=item_od.uid)
+                god.client.conn.mail(constants.MAIL_CRAFT_REQUEST, item_uid=item_od.uid)
 
     def render(self, b, cont: pygame.Rect):
         self.b = b
@@ -76,7 +76,7 @@ class CraftingInterface:
                     cs
                     if i in [0, len(constants.CRAFTING_INTERFACE_SECTIONS) - 1]
                     else 0,
-                    255,
+                    constants.OPAQUE,
                 )
             icon = god.assets.icons_texs[cat["icon"]]
             hovering = hover_rect.collidepoint(god.input.mouse_screen)

@@ -5,6 +5,7 @@ from src import constants
 from src.client import god
 from src.object_data import ItemOD
 from src.client.ui.building import BuildingInterface
+from src.client.ui.panel import IconButton
 
 
 class StorageInterface(BuildingInterface, name_id="storage"):
@@ -40,6 +41,7 @@ class StorageInterface(BuildingInterface, name_id="storage"):
                     ghost=(god.ui.inventory.floating_slot.source_slot is slots[slot_i]),
                 )
                 slot_i += 1
+        return hovering_slot
 
 
 class HopperInterface(BuildingInterface, name_id="hopper"):
@@ -61,6 +63,14 @@ class BotInterface(BuildingInterface, name_id="bot"):
     def __init__(self):
         super().__init__()
         self.filter: ItemOD = None
+        self.filter_rect: pygame.Rect = None
+        items = sorted(
+            sorted(ItemOD.get_list(), key=lambda item: item.display_name),
+            key=lambda item: item.category if item.category is not None else "zzz",
+        )
+        self.item_slots = [shared.Slot(item, 1) for item in items]
+        self.back_btn = IconButton("left-arrow", "0.5", 0.9)
+        self.delete_btn = IconButton("delete", "0.5", 0.6)
 
     def refresh_data(self, base_data, building_data):
         self.refresh_inventories_data(base_data, building_data)
@@ -69,6 +79,70 @@ class BotInterface(BuildingInterface, name_id="bot"):
             if building_data["filter"] is None
             else ItemOD.get(building_data["filter"])
         )
+
+    def mouse_clicked(self, event: pygame.Event):
+        if event.button != pygame.BUTTON_LEFT:
+            return
+        if god.ui.overlay_menu_func is not None:
+            if self.back_btn.clicked(event):
+                god.ui.overlay_menu_func = None
+            if self.delete_btn.clicked(event):
+                god.ui.overlay_menu_func = None
+                god.client.conn.mail(
+                    constants.MAIL_BUILDING_CONFIG,
+                    building_id=self.building_data.id,
+                    filter_uid=None,
+                )
+            for slot in self.item_slots:
+                if slot.hitbox.collidepoint(event.pos):
+                    god.client.conn.mail(
+                        constants.MAIL_BUILDING_CONFIG,
+                        building_id=self.building_data.id,
+                        filter_uid=slot.item.uid,
+                    )
+                    god.ui.overlay_menu_func = None
+        else:
+            if self.filter_rect is None or not self.filter_rect.collidepoint(event.pos):
+                return
+            god.ui.overlay_menu_func = self.render_filter_selection
+
+    def render_filter_selection(self, cont: pygame.Rect):
+        bottom = god.ui.inventory.render_interface_title(
+            "Select Filter", cont.topleft, cont.w, 0.5
+        )
+        pad = cont.w * constants.UI_INVENTORY_PADDING_MULT
+        b = self.b
+        slots_w = cont.w - pad * 2
+        slot_size = god.ui.inventory.slot_size
+        slots_per_row = int(slots_w / (slot_size + b))
+        slot_b = (slots_w - slots_per_row * slot_size) / (slots_per_row - 1)
+        ri = 0
+        ii = 0
+        hovering = None
+        while ii < len(self.item_slots):
+            for ci in range(slots_per_row):
+                rect = pygame.Rect(
+                    cont.x + pad + (slot_size + slot_b) * ci,
+                    bottom + pad + (slot_size + slot_b) * ri,
+                    slot_size,
+                    slot_size,
+                )
+                hovering = god.ui.inventory.render_slot(
+                    rect, self.item_slots[ii], hovering, storage=False
+                )
+                ii += 1
+                if ii >= len(self.item_slots):
+                    break
+            ri += 1
+        left_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            bottomright=(cont.centerx - slot_b, cont.bottom - slot_b)
+        )
+        right_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            bottomleft=(cont.centerx + slot_b, cont.bottom - slot_b)
+        )
+        self.back_btn.render(left_rect)
+        self.delete_btn.render(right_rect)
+        return hovering
 
     def render(self, b, cont):
         self.render_title(cont, b)
@@ -83,6 +157,7 @@ class BotInterface(BuildingInterface, name_id="bot"):
         filter_rect = pygame.Rect(0, 0, filter_size, filter_size).move_to(
             center=(cont.centerx, cont.centery - cont.h / 4)
         )
+        self.filter_rect = filter_rect
         slot_1 = self.inventories["in"][0]
         slot_2 = self.inventories["upgrade"][0]
         hovering = None
@@ -101,7 +176,7 @@ class BotInterface(BuildingInterface, name_id="bot"):
             ghost=god.ui.inventory.floating_slot.source_slot is slot_2,
         )
         hovering = god.ui.inventory.render_slot(
-            filter_rect, shared.Slot(self.filter, 0), hovering, "lock", storage=False
+            filter_rect, shared.Slot(self.filter, 1), hovering, "lock", storage=False
         )
         return hovering
 

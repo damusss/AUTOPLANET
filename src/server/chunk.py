@@ -40,7 +40,11 @@ class Chunk:
 
     @property
     def buildings(self):
-        return (god.world.buildings[bid] for bid in self.building_ids)
+        return (
+            god.world.buildings[bid]
+            for bid in self.building_ids
+            if bid in god.world.buildings
+        )
 
     def get_energy_providers_for_rect(self, rect) -> list[EnergyProvider]:
         providers = []
@@ -152,6 +156,20 @@ class Chunk:
         return tile_pos[1] * constants.CHUNK_SIZE + tile_pos[0]
 
     def get_client_data(self):
+        traj = []
+        for building in self.buildings:
+            for bot_id, kind in building.bots_endpoint.items():
+                if bot_id not in god.world.buildings:
+                    continue
+                bot = god.world.buildings[bot_id]
+                other = bot.trajectory[shared.other_kind(kind)]
+                if other is None:
+                    continue
+                if kind == "in":
+                    data = [building.hitbox.center, other.hitbox.center]
+                else:
+                    data = [other.hitbox.center, building.hitbox.center]
+                traj.append(data)
         return {
             "key": self.chunk_key,
             "stars": self.stars,
@@ -159,22 +177,18 @@ class Chunk:
             "big_star": self.big_star,
             "tiles": self.tiles_mat,
             "lights": self.lights,
-            "buildings": [
-                god.world.buildings[bid].get_client_data()
-                for bid in self.building_ids
-                if bid in god.world.buildings
-            ],
+            "buildings": [building.get_client_data() for building in self.buildings],
             "energy": sum(
                 (
                     [
                         conn.get_client_data()
-                        for conn in god.world.buildings[bid].ext.energy_conns[
+                        for conn in building.ext.energy_conns[
                             : constants.MAX_CLIENT_CONNECTIONS_PER_BUILDING
                         ]
                     ]
-                    for bid in self.building_ids
-                    if bid in god.world.buildings
+                    for building in self.buildings
                 ),
                 start=[],
             ),
+            "traj": traj,
         }

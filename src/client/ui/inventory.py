@@ -295,7 +295,9 @@ class InventoryInterface:
         ).move_to(center=(god.windowing.width / 2, god.windowing.height / 2))
         cs = cont.w * constants.UI_INVENTORY_CORNER_SIZE_MULT
         render_panel(cont, cs, 2, bg_alpha=constants.UI_PANEL_BG_OPAQUE_ALPHA)
-        god.assets.white_tex.alpha = 255
+        if god.ui.overlay_menu_func is not None:
+            return cont, None
+        god.assets.white_tex.alpha = constants.OPAQUE
         god.assets.white_tex.color = "black"
         god.assets.white_tex.draw(None, (cont.centerx - cs, cont.y, cs * 2, 2))
         title_bottom = self.render_interface_title(
@@ -410,9 +412,9 @@ class InventoryInterface:
                 img_rect,
             )
             if slot.empty:
-                img.alpha = 255
+                img.alpha = constants.OPAQUE
             elif ghost:
-                img.alpha = 255
+                img.alpha = constants.OPAQUE
             if image_percentage != 1:
                 god.assets.white_tex.color = "black"
                 god.assets.white_tex.alpha = constants.UI_SLOT_PROGRESS_ALPHA
@@ -463,13 +465,13 @@ class InventoryInterface:
         else:
             return hovering_slot
 
-    def render_interface_title(self, title, topleft, width):
-        title_h = width * constants.UI_INVENTORY_TITLE_H_MULT
+    def render_interface_title(self, title, topleft, width, height_mult=1):
+        title_h = width * constants.UI_INVENTORY_TITLE_H_MULT*height_mult
         panel_h = title_h * 1.1
         title_tex, title_rect = god.assets.font.get_texture_and_rect(
             title, "white", title_h
         )
         panel_rect = pygame.Rect(topleft[0], topleft[1], width, panel_h)
-        render_panel(panel_rect, panel_h / 2, 2, bg_alpha=255)
+        render_panel(panel_rect, panel_h / 2, 2, bg_alpha=constants.OPAQUE)
         title_tex.draw(None, title_rect.move_to(center=panel_rect.center))
         return panel_rect.bottom

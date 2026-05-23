@@ -39,7 +39,24 @@ class CommonBuildingExt:
 
     def init(self): ...
     def on_place(self): ...
-    def on_destroy(self): ...
+    def on_client_config(self, mail: shared.Mail): ...
+
+    def on_destroy(self):
+        self.drop_inventories()
+
+    def drop_inventories(self):
+        for inv in self.inventories.values():
+            if inv is None:
+                continue
+            else:
+                for slot in inv.slots:
+                    if slot.empty:
+                        continue
+                    god.world.drop(
+                        shared.get_drop_random_pos(self.building.hitbox),
+                        slot.item,
+                        slot.amount,
+                    )
 
     def get_inventories_data(self):
         data = {"inventories": {}}
@@ -79,6 +96,11 @@ class MovingBuildingExt(CommonBuildingExt):
 
     def on_reach(self, target: "Building", kind: str): ...
 
+    def get_inventories_data(self):
+        data = super().get_inventories_data()
+        data["building_id"] = self.building.id
+        return data
+
     def get_display_data(self): ...
 
 
@@ -117,18 +139,6 @@ class BuildingExt(CommonBuildingExt):
         self.destroyed = True
         for conn in list(self.energy_conns):
             conn.destroy()
-        for inv in self.inventories.values():
-            if inv is None:
-                continue
-            else:
-                for slot in inv.slots:
-                    if slot.empty:
-                        continue
-                    god.world.drop(
-                        shared.get_drop_random_pos(self.building.hitbox),
-                        slot.item,
-                        slot.amount,
-                    )
 
     def on_conn_activated(self, conn: "EnergyConn"):
         if self.disrupt_alert:
@@ -181,6 +191,7 @@ class Building:
         self.state = self.building_od.states["default"].name
         self.has_energy = False
         self.require_floor = True
+        self.bots_endpoint = {}
         self.subscribed_client_players: list["Player"] = []
         self.ext = BuildingExt.create_ext(self)
 
@@ -200,6 +211,15 @@ class Building:
         self.ext.on_place()
 
     def on_destroy(self):
+        for bot_id, endpoint_kind in self.bots_endpoint.items():
+            if bot_id in god.world.buildings:
+                bot: "MovingBuilding" = god.world.buildings[bot_id]
+                bot.trajectory[endpoint_kind] = None
+                other = bot.trajectory[shared.other_kind(endpoint_kind)]
+                bot.refresh_trajectory()
+                if other is not None:
+                    other.chunk.refresh()
+        self.bots_endpoint = set()
         self.ext.on_destroy()
         self.refresh_interact()
 
@@ -229,7 +249,7 @@ class MovingBuilding:
         self.target_kind: str = None
         self.last_known_center = self.center
         self.last_known_time = 0
-        self.last_known_direction = pygame.Vector2()
+        self.last_known_direction = pygame.Vector2(-1, 0)
         self.speed_ps = constants.BOT_SPEED_PS
         self.trajectory_chunks = set()
         self.temporary_trajectory_chunks = set()
@@ -258,6 +278,7 @@ class MovingBuilding:
 
     def refresh_trajectory(self):
         self.moving = False
+        self.reach_id = None
         here = shared.get_chunk_pos(self.center)
         herek = shared.get_chunk_key(here)
         chunks = {herek}
@@ -266,7 +287,11 @@ class MovingBuilding:
             a = pygame.Vector2(self.trajectory["in"].hitbox.center)
         if self.trajectory["out"] is not None:
             b = pygame.Vector2(self.trajectory["out"].hitbox.center)
-        if a is None or b is None:
+        if (
+            a is None
+            or b is None
+            or a.distance_to(b) > constants.BOT_TRAJECTORY_MAX_SIZE
+        ):
             self.update_trajectory_chunks(chunks)
             return
         main_chunks = shared.get_trajectory_chunks(a, b)
@@ -300,10 +325,8 @@ class MovingBuilding:
             self.refresh_trajectory()
             return
         self.ext.on_reach(self.move_target, self.target_kind)
-        if self.move_target == self.trajectory["in"]:
-            self.depart(self.trajectory["out"], constants.INVENTORY_KIND_OUTPUT)
-        else:
-            self.depart(self.trajectory["in"], constants.INVENTORY_KIND_INPUT)
+        new_kind = shared.other_kind(self.target_kind)
+        self.depart(self.trajectory[new_kind.removesuffix("put")], new_kind)
 
     def partial_remove_trajectory(self, chunk_keys):
         for ckey in chunk_keys:

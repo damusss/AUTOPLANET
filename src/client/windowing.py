@@ -14,7 +14,7 @@ class Windowing:
         pygame.init()
         god.windowing = self
         size = pygame.display.get_desktop_sizes()[0]
-        # size = 1500, 900
+        #  size = 1500, 900
         self.window = pygame.Window("Client", size, resizable=True)
         self.renderer = Renderer(self.window, accelerated=True)
         self.renderer.draw_blend_mode = pygame.BLENDMODE_BLEND

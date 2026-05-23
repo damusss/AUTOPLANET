@@ -78,7 +78,7 @@ def nylium_biome_handler(rel_y, wx):
 
 def underground_biome_handler(rel_y, wx):
     solid = 1
-    ore_amount = 100
+    ore_amount = 1000
     tile_type = TileOD.objects.core
     if CAVES.get_value(wx, rel_y) <= CAVES.value_is_block:
         solid = 0

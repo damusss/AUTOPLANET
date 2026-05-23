@@ -2,6 +2,7 @@ import os
 
 import pygame
 
+from src import shared
 from src import constants
 from src.client import god
 from src.object_data import TileOD, ItemOD, BuildingOD
@@ -150,7 +151,7 @@ class Assets:
                 self.tiles[tile] = surf
                 self.tile_texs[tile] = self.load_tex(surf)
             except FileNotFoundError:
-                print(f"Missing image {f'tiles/{tile}.png'}")
+                shared.log(f"Missing image {f'tiles/{tile}.png'}")
                 self.tile_texs[tile] = self.placeholder_tex
 
     def load_buildings(self):
@@ -178,7 +179,7 @@ class Assets:
                     self.buildings[state.image_name] = surf
                     self.building_texs[state.image_name] = self.load_tex(surf)
                 except FileNotFoundError:
-                    print(
+                    shared.log(
                         f"Missing building state image 'items/states/{state.image_name}.png'"
                     )
                     self.buildings[state.image_name] = pygame.transform.scale(
@@ -201,7 +202,7 @@ class Assets:
                 bounding = mask.get_bounding_rects()[0]
                 self.drop_inflate_percentages[item] = surf.height / bounding.h
             except FileNotFoundError:
-                print(f"Missing image {f'items/{item}.png'}")
+                shared.log(f"Missing image {f'items/{item}.png'}")
                 self.item_texs[item] = self.placeholder_tex
 
     def load_building_previews(self):

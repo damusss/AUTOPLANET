@@ -39,7 +39,7 @@ class World:
         assert buildings
 
     def print_fps(self):
-        print(f"FPS: {self.clock.get_fps():.0f}")
+        shared.log(f"FPS: {self.clock.get_fps():.0f}")
         return self.print_fps
 
     def player_connect(self, client):
@@ -188,10 +188,15 @@ class World:
     def refresh_building_interact(self, building: Building):
         for player in building.subscribed_client_players:
             if building.ext.destroyed:
-                player.client.conn.mail(constants.MAIL_BUILDING_INTERACT, broken=True)
+                player.client.conn.mail(
+                    constants.MAIL_REFRESH_BUILDING_INTERACT,
+                    base_data=None,
+                    building_data=None,
+                    broken=True,
+                )
             else:
                 player.client.conn.mail(
-                    constants.MAIL_BUILDING_INTERACT,
+                    constants.MAIL_REFRESH_BUILDING_INTERACT,
                     base_data=building.get_client_data(),
                     building_data=building.ext.get_client_data(),
                     broken=False,
@@ -226,6 +231,15 @@ class World:
     def edit_bot_trajectory(self, bot: MovingBuilding, target: Building, kind: str):
         if bot.building_od != BuildingOD.objects.bot:
             return
+        name = kind.removesuffix("put")
+        if target is None:
+            prev = bot.trajectory[name]
+            if prev is not None and bot.id in prev.bots_endpoint:
+                prev.bots_endpoint.pop(bot.id)
+                prev.chunk.refresh()
+            bot.trajectory[name] = None
+            bot.refresh_trajectory()
+            return
         valid = False
         target_od = target.building_od
         if (
@@ -242,8 +256,17 @@ class World:
             valid = True
         if not valid:
             return
-        name = kind.removesuffix("put")
+
+        other = shared.other_kind(name)
+        if bot.trajectory[other] is target:
+            bot.trajectory[other] = None
+        prev = bot.trajectory[name]
+        if prev is not None and bot.id in prev.bots_endpoint:
+            prev.bots_endpoint.pop(bot.id)
+            prev.chunk.refresh()
         bot.trajectory[name] = target
+        target.bots_endpoint[bot.id] = name
+        target.chunk.refresh()
         bot.refresh_trajectory()
 
     def break_moving_building(

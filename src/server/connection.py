@@ -31,9 +31,9 @@ class SocketClientConnection(ClientConnection):
         try:
             self.socket.sendall(sock.encode("utf-8"))
         except ConnectionResetError:
-            self.server.mailbox.put(
-                shared.Mail(constants.MAIL_DISCONNECT, self.client_id)
-            )
+            mail = shared.Mail(constants.MAIL_DISCONNECT, self.client_id)
+            if mail.valid:
+                self.server.mailbox.put(mail)
 
 
 class ServerConnection:
@@ -49,15 +49,20 @@ class SocketServerConnection(ServerConnection):
         super().__init__(server)
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.socket.bind((constants.SOCKET_ADDR, constants.SOCKET_PORT))
+        self.socket.bind((constants.SERVER_SOCKET_ADDR, constants.SERVER_SOCKET_PORT))
         self.socket.listen()
         self.socket.setblocking(False)
+        shared.log(
+            f"[S] Server socket initialized and bound to {constants.SERVER_SOCKET_ADDR}:{constants.SERVER_SOCKET_PORT}"
+        )
 
     def close(self):
         self.socket.close()
 
     def put_mail(self, type, client_id, **data):
-        self.server.mailbox.put(shared.Mail(type, client_id, **data))
+        mail = shared.Mail(type, client_id, **data)
+        if mail.valid:
+            self.server.mailbox.put(mail)
 
     def frame(self):
         try:
@@ -73,7 +78,7 @@ class SocketServerConnection(ServerConnection):
                 if data:
                     socks = data.split("\n")
                     for sock in socks:
-                        if sock:
+                        if sock.strip():
                             sock = json.loads(sock)
                             self.put_mail(
                                 sock["type"], sock["client_id"], **sock["data"]

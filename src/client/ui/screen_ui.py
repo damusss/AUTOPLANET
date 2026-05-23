@@ -1,5 +1,6 @@
 import pygame
 
+from src import shared
 from src import constants
 from src.client import god
 from src.object_data import ItemOD
@@ -30,7 +31,7 @@ class UIRaycastHit:
         self.object_data = self.item
 
 
-class WorldUI:
+class ScreenUI:
     def __init__(self, renderer):
         god.ui = self
         self.ui_raycast = None
@@ -42,6 +43,7 @@ class WorldUI:
         self.inventory = InventoryInterface()
         self.crafting_interface = CraftingInterface()
         self.cursor = constants.CURSOR_IDLE_WORLD
+        self.overlay_menu_func = None
         self.building_interfaces: dict[str, BuildingInterface] = (
             BuildingInterface.get_interfaces()
         )
@@ -52,11 +54,13 @@ class WorldUI:
         if self.open_interface:
             self.open_interface.mouse_clicked(event)
             interface_slots = self.open_interface.get_slots()
+        if self.overlay_menu_func is not None:
+            return
         self.inventory.mouse_clicked(event, interface_slots)
 
     def refresh_building_interact(self, base_data, building_data):
         data_holder = BuildingDataHolder(
-            base_data, 0 if isinstance(base_data[0], str) else -1
+            base_data, building_data.get("building_id", None)
         )
         if not self.inventory_open:
             self.inventory_open = True
@@ -91,7 +95,7 @@ class WorldUI:
                 bar_h,
             ),
             cs,
-            bg_alpha=255,
+            bg_alpha=constants.OPAQUE,
             bg_color=constants.UI_HEALTH_COL,
         )
         render_panel_bg(
@@ -102,28 +106,32 @@ class WorldUI:
                 bar_h,
             ),
             cs,
-            bg_alpha=255,
+            bg_alpha=constants.OPAQUE,
             bg_color=constants.UI_ENERGY_COL,
         )
         render_panel_outline(
             (box.x + self.b, box.y + self.b, bar_w, bar_h),
             cs,
-            outline_alpha=255,
+            outline_alpha=constants.OPAQUE,
             outline_color=constants.UI_BARS_OUTLINE_COL,
         )
         render_panel_outline(
             (box.x + self.b, box.y + self.b * 2 + bar_h, bar_w, bar_h),
             cs,
-            outline_alpha=255,
+            outline_alpha=constants.OPAQUE,
             outline_color=constants.UI_BARS_OUTLINE_COL,
         )
         circle = pygame.Rect(box.x + self.b, box.y + self.b, bar_h, bar_h)
-        render_panel_bg(circle.inflate(2, 2), cs, 255, constants.UI_BARS_OUTLINE_COL)
+        render_panel_bg(
+            circle.inflate(2, 2), cs, constants.OPAQUE, constants.UI_BARS_OUTLINE_COL
+        )
         god.assets.health_tex.draw(None, circle.inflate(-4, -4))
         circle = pygame.Rect(
             box.x + self.b, box.y + self.b * 2 + bar_h, bar_h, bar_h
         ).inflate(2, 2)
-        render_panel_bg(circle.inflate(2, 2), cs, 255, constants.UI_BARS_OUTLINE_COL)
+        render_panel_bg(
+            circle.inflate(2, 2), cs, constants.OPAQUE, constants.UI_BARS_OUTLINE_COL
+        )
         god.assets.energy_tex.draw(None, circle.inflate(-4, -4))
 
         pos_tex, pos_rect = god.assets.font.get_texture_and_rect(
@@ -132,9 +140,45 @@ class WorldUI:
             bar_h,
         )
         pos_tex.draw(None, pos_rect.move_to(topleft=(self.b * 2, box.bottom + self.b)))
+        return box.right + self.b
+
+    def render_debug_indicators(self, left):
+        size = god.windowing.height * constants.UI_DEBUG_INDICATORS_H_MULT
+        for item_name, active, key_num, color in (
+            (
+                "energy_transmitter",
+                god.rendering.energy_debug,
+                1,
+                constants.ENERGY_DEBUG_COLOR,
+            ),
+            ("bot", god.rendering.trajectory_debug, 2, constants.TRAJECTORY_COLOR),
+        ):
+            tex = god.assets.building_preview_texs[item_name]
+            tex.alpha = (
+                constants.OPAQUE_INDICATOR_ALPHA
+                if active
+                else constants.GHOST_INDICATOR_ALPHA
+            )
+            tex.color = color
+            rect = pygame.Rect(0, 0, size, size).move_to(topleft=(left, self.b))
+            tex.draw(None, rect)
+            tex.alpha = constants.OPAQUE
+            tex.color = "white"
+            god.assets.font.font.outline = 1
+            key_tex_o, key_rect_o = god.assets.font.get_texture_and_rect(
+                str(key_num), "black", size / 1.3
+            )
+            god.assets.font.font.outline = 0
+            key_tex, key_rect = god.assets.font.get_texture_and_rect(
+                str(key_num), "white", size / 1.3
+            )
+            key_tex_o.draw(None, key_rect_o.move_to(center=rect.center))
+            key_tex.draw(None, key_rect.move_to(center=rect.center))
+            left += size + self.b
 
     def render_edit_trajectory(self):
         text_h = god.windowing.width * constants.UI_EDIT_TRAJECTORY_TEXT_H
+        error = god.rendering.edit_trajectory_too_far_units is not None
         extra = (
             "Take From"
             if god.player.edit_trajectory_kind == constants.INVENTORY_KIND_INPUT
@@ -149,19 +193,25 @@ class WorldUI:
             else constants.RED_BAD,
             text_h,
         )
+        if error:
+            error_text = f"Trajectory is {god.rendering.edit_trajectory_too_far_units} units too long"
+            error_tex, error_rect = god.assets.font.get_texture_and_rect(
+                error_text, constants.TRAJECTORY_ERROR_COLOR, text_h
+            )
         god.assets.font.font.outline = 1
-
         kind_tex_outline, kind_rect_outline = god.assets.font.get_texture_and_rect(
             text,
             "black",
             text_h,
         )
+        if error:
+            error_tex_outline, error_rect_outline = (
+                god.assets.font.get_texture_and_rect(error_text, "black", text_h)
+            )
         god.assets.font.font.outline = 0
-        other = constants.INVENTORY_KIND_INPUT
-        if god.player.edit_trajectory_kind == constants.INVENTORY_KIND_INPUT:
-            other = constants.INVENTORY_KIND_OUTPUT
+        other = shared.other_kind(god.player.edit_trajectory_kind)
         help_tex, help_rect = god.assets.font.get_texture_and_rect(
-            f"Middle click to edit {other}\nRight click to select",
+            f"Middle click to edit {other}\nRight click endpoint to select it\nRight click bot to remove trajectory",
             constants.UI_INFO_DESCR_COL,
             text_h,
         )
@@ -173,6 +223,12 @@ class WorldUI:
         )
         kind_tex_outline.draw(None, kind_rect_outline.move_to(center=kind_rect.center))
         kind_tex.draw(None, kind_rect)
+        if error:
+            error_rect = error_rect.move_to(midbottom=kind_rect.midtop)
+            error_tex_outline.draw(
+                None, error_rect_outline.move_to(center=error_rect.center)
+            )
+            error_tex.draw(None, error_rect)
         help_tex.draw(
             None,
             help_rect.move_to(
@@ -215,7 +271,8 @@ class WorldUI:
         self.b = god.windowing.width * (constants.UI_BORDER_PERCENT / 100)
         if god.player.edit_trajectory_bot is not None:
             self.render_edit_trajectory()
-        self.render_stats()
+        right = self.render_stats()
+        self.render_debug_indicators(right)
         self.render_craft_queue()
         prev_ray = self.ui_raycast
         self.ui_raycast = None
@@ -228,7 +285,7 @@ class WorldUI:
                 self.cursor = constants.CURSOR_IDLE_UI
             if hovering_slot:
                 self.cursor = constants.CURSOR_HOVER
-            if self.open_interface is not None:
+            if self.overlay_menu_func is None and self.open_interface is not None:
                 slot = self.open_interface.render(
                     self.b, pygame.Rect(cont.x + cont.w / 2, cont.y, cont.w / 2, cont.h)
                 )
@@ -237,6 +294,11 @@ class WorldUI:
                     self.cursor = constants.CURSOR_HOVER
                     if self.open_interface == self.crafting_interface:
                         crafting_slot = True
+            if self.overlay_menu_func is not None:
+                slot = self.overlay_menu_func(cont)
+                if slot is not None:
+                    hovering_slot = slot
+                    self.cursor = constants.CURSOR_HOVER
             if hovering_slot is not None:
                 if hovering_slot.empty:
                     if hovering_slot.filter:
@@ -267,28 +329,32 @@ class WorldUI:
             )
         self.raycast_info.render(self.b)
         if self.inventory.floating_slot.source_slot is not None:
-            rect = god.player.inventory_slots[0].hitbox.move_to(
-                center=god.input.mouse_screen
-            )
-            self.inventory.render_slot(
-                rect,
-                self.inventory.floating_slot,
-                None,
-                render_bg=False,
-            )
-            if not cont.collidepoint(god.input.mouse_screen):
-                icon = god.assets.icons_texs["drop"]
-                icon.color = constants.GREEN_GOOD
-                icon.alpha = constants.UI_SLOT_GHOST_ALPHA
-                icon.draw(
-                    None,
-                    rect.move_to(
-                        width=rect.w / 1.5,
-                        height=rect.h / 1.5,
-                        center=(rect.centerx, rect.centery + rect.h),
-                    ),
-                )
+            self.render_floating_slot(cont)
         pygame.mouse.set_cursor(self.cursor)
+
+    def render_floating_slot(self, cont: pygame.Rect):
+
+        rect = god.player.inventory_slots[0].hitbox.move_to(
+            center=god.input.mouse_screen
+        )
+        self.inventory.render_slot(
+            rect,
+            self.inventory.floating_slot,
+            None,
+            render_bg=False,
+        )
+        if not cont.collidepoint(god.input.mouse_screen):
+            icon = god.assets.icons_texs["drop"]
+            icon.color = constants.GREEN_GOOD
+            icon.alpha = constants.UI_SLOT_GHOST_ALPHA
+            icon.draw(
+                None,
+                rect.move_to(
+                    width=rect.w / 1.5,
+                    height=rect.h / 1.5,
+                    center=(rect.centerx, rect.centery + rect.h),
+                ),
+            )
 
     def can_interact_world(self):
         return not self.inventory_open or self.ui_raycast is None
@@ -310,4 +376,5 @@ class WorldUI:
                 self.open_interface.unsubscribe()
             self.open_interface = None
             self.inventory.floating_slot = FloatingSlot(None, 0)
+            self.overlay_menu_func = None
         self.inventory_open = not self.inventory_open

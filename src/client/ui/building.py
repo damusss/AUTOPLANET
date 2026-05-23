@@ -72,7 +72,7 @@ class BuildingInterface:
     def render_icon_progress(self, icon, rect, progress_active, start_time, time_s):
         icon.alpha = constants.UI_INTERFACE_ICON_ALPHA
         icon.draw(None, rect)
-        icon.alpha = 255
+        icon.alpha = constants.OPAQUE
         if progress_active:
             mult = (pygame.time.get_ticks() - start_time) / (time_s * 1000)
             perc_source_h = icon.height * mult

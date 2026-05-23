@@ -22,6 +22,7 @@ class WorldState:
         self.other_players: dict[int, OtherPlayer] = {}
         self.drops_data = []
         self.moving_buildings_data = {}
+        self.bots_anim_offset = {}
 
     def other_player_connect(self, player_id, pos, name):
         new_player = self.other_players[player_id] = OtherPlayer(pos, player_id, name)

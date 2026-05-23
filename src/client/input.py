@@ -1,5 +1,6 @@
 import pygame
 
+from src import shared
 from src import constants
 from src.client import god
 from src.object_data import BuildingOD
@@ -11,6 +12,7 @@ class Input:
         self.input_dir = pygame.Vector2()
         self.mouse_screen = pygame.Vector2()
         self.mouse_world = pygame.Vector2()
+        self.manual_energy_debug = False
         # temp connect to server
         pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_c))
 
@@ -58,16 +60,21 @@ class Input:
                                 kind=god.player.edit_trajectory_kind,
                                 target_id=god.player.raycast.data[0],
                             )
-                            if (
+                            god.player.edit_trajectory_kind = shared.other_kind(
                                 god.player.edit_trajectory_kind
-                                == constants.INVENTORY_KIND_INPUT
-                            ):
-                                god.player.edit_trajectory_kind = (
-                                    constants.INVENTORY_KIND_OUTPUT
-                                )
-                            else:
-                                god.player.edit_trajectory_kind = (
-                                    constants.INVENTORY_KIND_INPUT
+                            )
+                        elif (
+                            god.player.raycast.data[0] == god.player.edit_trajectory_bot
+                        ):
+                            for kind in [
+                                constants.INVENTORY_KIND_INPUT,
+                                constants.INVENTORY_KIND_OUTPUT,
+                            ]:
+                                god.client.conn.mail(
+                                    constants.MAIL_BOT_TRAJECTORY,
+                                    bot_id=god.player.edit_trajectory_bot,
+                                    kind=kind,
+                                    target_id=None,
                                 )
 
                 elif (
@@ -79,8 +86,24 @@ class Input:
                 ):
                     if god.player.edit_trajectory_bot == god.player.raycast.data[0]:
                         god.player.set_edit_trajectory(None)
+                        if (
+                            god.player.count_item(god.player.raycast.object_data.item)
+                            >= 1
+                        ):
+                            god.player.set_building_preview(
+                                god.player.raycast.object_data
+                            )
                     else:
                         god.player.set_edit_trajectory(god.player.raycast.data[0])
+                elif (
+                    event.button == pygame.BUTTON_MIDDLE
+                    and not god.ui.inventory_open
+                    and god.player.raycast is not None
+                    and god.player.raycast.type == constants.RAYCAST_BUILDING
+                    and god.player.raycast.object_data != BuildingOD.objects.bot
+                ):
+                    if god.player.count_item(god.player.raycast.object_data.item) >= 1:
+                        god.player.set_building_preview(god.player.raycast.object_data)
                 elif (
                     event.button == pygame.BUTTON_MIDDLE
                     and not god.ui.inventory_open
@@ -103,21 +126,28 @@ class Input:
                     )
         if event.type in [pygame.KEYDOWN, pygame.KEYUP]:
             if False:
-                god.client.conn.mail(constants.MAIL_INPUT_EVENT, input_type=event.type)
+                god.client.conn.mail(constants.MAIL_INPUT_EVENT, input_type=event.type, button=None)
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_BACKSLASH:
                 god.rendering.debug = not god.rendering.debug
             if event.key == pygame.K_1:
                 god.rendering.energy_debug = not god.rendering.energy_debug
+                self.manual_energy_debug = True
+            if event.key == pygame.K_2:
+                god.rendering.trajectory_debug = not god.rendering.trajectory_debug
         if event.type == pygame.KEYUP:
             if event.key == pygame.K_e:
                 god.ui.toggle_inventory(True)
             if event.key == pygame.K_ESCAPE:
-                god.player.set_building_preview(None)
-                god.player.set_edit_trajectory(None)
-                god.rendering.energy_debug = False
-                if god.ui.inventory_open:
-                    god.ui.toggle_inventory()
+                if god.ui.inventory_open and god.ui.overlay_menu_func is not None:
+                    god.ui.overlay_menu_func = None
+                else:
+                    god.player.set_building_preview(None)
+                    god.player.set_edit_trajectory(None)
+                    god.rendering.energy_debug = False
+                    god.rendering.trajectory_debug = False
+                    if god.ui.inventory_open:
+                        god.ui.toggle_inventory()
             if event.key == pygame.K_q:
                 god.player.set_building_preview(None)
                 god.player.set_edit_trajectory(None)
