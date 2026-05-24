@@ -50,6 +50,8 @@ class RaycastInfoUI:
             bottom = self.render_object_pos(
                 bottom, raycast, col_w, cs, self.b, self.b * 2
             )
+        elif raycast.type == constants.RAYCAST_VEGETATION:
+            bottom = self.render_drops(bottom, raycast, col_w, cs, self.b, self.b * 2)
         elif raycast.type == constants.RAYCAST_UI_ITEM:
             if raycast.filter:
                 bottom = self.render_slot_filter(
@@ -329,6 +331,14 @@ class RaycastInfoUI:
             status = status.replace(
                 "<r1>", god.player.building_preview.altitude_range[0]
             ).replace("<r2>", god.player.building_preview.altitude_range[1])
+        elif (
+            god.player.building_available
+            == constants.BUILDING_STATUS_MISSING_VEGETATION
+        ):
+            status = status.replace(
+                "<vegetation>",
+                god.player.building_preview.vegetation_requirement.display_name,
+            )
         status_tex, status_rect = god.assets.font.get_texture_and_rect(
             status, constants.RED_BAD, status_h, content_w
         )
@@ -377,6 +387,36 @@ class RaycastInfoUI:
                 (
                     floor_tex,
                     floor_rect.move_to(center=(box.centerx, box.bottom - h / 2)),
+                )
+            )
+            to_draw.append(
+                (
+                    img,
+                    pygame.Rect(0, 0, floor_h, floor_h).move_to(
+                        midright=(box.right - b, box.bottom - h / 2)
+                    ),
+                )
+            )
+            box.h += b
+        if building_od.vegetation_requirement is not None:
+            box.h += b * 2
+            subtitle_tex, subtitle_rect = god.assets.font.get_texture_and_rect(
+                "Requires", "white", subtitle_h
+            )
+            subtitle_rect = subtitle_rect.move_to(midbottom=box.midbottom)
+            box.h += b * 2
+            veg_od = building_od.vegetation_requirement
+            to_draw.append((subtitle_tex, subtitle_rect))
+            veg_tex, veg_rect = god.assets.font.get_texture_and_rect(
+                veg_od.display_name, "white", floor_name_h, content_w - floor_h
+            )
+            img = god.assets.vegetation_texs[veg_od.name_id]
+            h = max(floor_rect.h, floor_h)
+            box.h += h
+            to_draw.append(
+                (
+                    veg_tex,
+                    veg_rect.move_to(center=(box.centerx, box.bottom - h / 2)),
                 )
             )
             to_draw.append(
@@ -605,6 +645,8 @@ class RaycastInfoUI:
             object_tex = god.assets.building_texs[
                 raycast.object_data.states[raycast.data[1]].image_name
             ]
+        elif raycast.type == constants.RAYCAST_VEGETATION:
+            object_tex = god.assets.vegetation_texs[raycast.object_data.name_id]
         image_rect = pygame.Rect(
             box.x + b + (content_w / 2 - image_w / 2),
             title_rect.bottom + b,

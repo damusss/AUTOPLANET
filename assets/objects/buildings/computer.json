@@ -1,4 +1,17 @@
 {
     "size": [2, 2],
-    "floor_whitelist": ["copper_platform"]
+    "floor_whitelist": ["copper_platform"],
+    "states": {
+        "on": {
+            "default_image": true,
+            "light": {
+                "radius": 7,
+                "intensity": 130,
+                "color": "#FFFFFF"
+            }
+        },
+        "off": {
+            "default": true
+        }
+    }
 }

@@ -1,0 +1,7 @@
+{
+    "display_name": "Nylium Grass",
+    "description": "NOTIMPLEMENTED",
+    "size": [1, 1],
+    "break_time_s": 0.7,
+    "item_drop": [["nylium_fiber", 2]]
+}

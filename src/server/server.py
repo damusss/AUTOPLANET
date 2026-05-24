@@ -91,14 +91,15 @@ class Server:
                     player.client.conn.mail(
                         constants.MAIL_OTHER_PLAYER_DISCONNECT, player_id=client.id
                     )
-                shared.log(f"[S] Client disconnected (name={client.name}, ID={client.id})")
+                shared.log(
+                    f"[S] Client disconnected (name={client.name}, ID={client.id})"
+                )
             if len(self.clients) <= 0:
                 self.freeze()
         elif mail.compare(constants.MAIL_HEARTBEAT):
             if mail.client_id in self.clients:
                 self.clients[mail.client_id].heartbeat()
         elif mail.compare(constants.MAIL_NAME):
-
             if mail.client_id in self.clients:
                 self.clients[mail.client_id].name = mail.name
         elif mail.compare(constants.MAIL_INPUT_DIR):
@@ -200,7 +201,9 @@ class Server:
                 ):
                     self.last_client_check = pygame.time.get_ticks()
                     if not psutil.pid_exists(self.client_PID):
-                        shared.log("[S] Offline client process not found, shutting down")
+                        shared.log(
+                            "[S] Offline client process not found, shutting down\n"
+                        )
                         self.abort = True
             while self.mailbox.qsize() > 0:
                 self.handle_mail(self.mailbox.get())

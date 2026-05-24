@@ -68,6 +68,7 @@ class Player(PlayerLike):
         self.edit_trajectory_bot = None
         self.edit_trajectory_kind = "input"
         self.break_start_time = None
+        self.break_mult = 1
         self.building_preview: BuildingOD | None = None
         self.building_available = constants.BUILDING_STATUS_OBSTRUCTED
         self.craft_queue: list[shared.CraftQueueItem] = []

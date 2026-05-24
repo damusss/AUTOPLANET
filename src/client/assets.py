@@ -5,7 +5,7 @@ import pygame
 from src import shared
 from src import constants
 from src.client import god
-from src.object_data import TileOD, ItemOD, BuildingOD
+from src.object_data import TileOD, ItemOD, BuildingOD, VegetationOD
 
 if constants.NEW_RENDER:
     from pygame._render import Texture
@@ -88,6 +88,7 @@ class Assets:
         self.load_tiles()
         self.load_items()
         self.load_icons()
+        self.load_vegetation()
         self.load_buildings()
         self.load_building_previews()
         self.load_energy_debug()
@@ -145,14 +146,30 @@ class Assets:
     def load_tiles(self):
         self.tiles: dict[str, pygame.Surface] = {}
         self.tile_texs: dict[str, Texture] = {}
+        placeholder = pygame.transform.smoothscale(
+            self.placeholder.convert(32), (constants.TILE_PX, constants.TILE_PX)
+        )
         for tile in TileOD.get_all().keys():
             try:
                 surf = self.load(f"tiles/{tile}.png")
                 self.tiles[tile] = surf
                 self.tile_texs[tile] = self.load_tex(surf)
             except FileNotFoundError:
-                shared.log(f"Missing image {f'tiles/{tile}.png'}")
+                shared.log(f"Missing image 'tiles/{tile}.png'")
                 self.tile_texs[tile] = self.placeholder_tex
+                self.tiles[tile] = placeholder
+
+    def load_vegetation(self):
+        self.vegetation: dict[str, pygame.Surface] = {}
+        self.vegetation_texs: dict[str, Texture] = {}
+        for vegetation in VegetationOD.get_all().keys():
+            try:
+                surf = self.load(f"vegetation/{vegetation}.png")
+                self.vegetation[vegetation] = surf
+                self.vegetation_texs[vegetation] = self.load_tex(surf)
+            except FileNotFoundError:
+                shared.log(f"Missing image 'vegetation/{vegetation}.png'")
+                self.vegetation_texs[vegetation] = self.placeholder_tex
 
     def load_buildings(self):
         self.buildings: dict[str, pygame.Surface] = {}
@@ -202,7 +219,7 @@ class Assets:
                 bounding = mask.get_bounding_rects()[0]
                 self.drop_inflate_percentages[item] = surf.height / bounding.h
             except FileNotFoundError:
-                shared.log(f"Missing image {f'items/{item}.png'}")
+                shared.log(f"Missing image 'items/{item}.png'")
                 self.item_texs[item] = self.placeholder_tex
 
     def load_building_previews(self):

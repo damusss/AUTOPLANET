@@ -1,0 +1,8 @@
+{
+    "display_name": "Cave Bulb",
+    "description": "NOTIMPLEMENTED",
+    "size": [1, 1],
+    "break_time_s": 1,
+    "require_floor": false,
+    "item_drop": [["nylium_fiber", 1]]
+}

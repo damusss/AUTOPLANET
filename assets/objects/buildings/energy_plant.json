@@ -1,10 +1,11 @@
 {
     "size": [2, 2],
-    "need_energy": false,
-    "floor_whitelist": ["nylium_surface"],
+    "need_energy": true,
+    "floor_whitelist": ["nylium", "nylium_surface"],
     "interface": false,
     "energy_radius": 16,
     "energy_endpoint_type": "plant",
+    "vegetation_requirement": "oxygen_plant",
     "states": {
         "on": {
             "default_image": true,

@@ -70,7 +70,9 @@ class Client:
             ]
 
             for other_player_id, other_player_data in mail.op.items():
-                if mail.missing_fields("p", "v", "fk", "fi", "bp", "ba", data=other_player_data):
+                if mail.missing_fields(
+                    "p", "v", "fk", "fi", "bp", "ba", data=other_player_data
+                ):
                     continue
                 other_player_id = int(other_player_id)
                 if other_player_id not in self.world.other_players:
@@ -107,6 +109,7 @@ class Client:
             if time == "now":
                 time = pygame.time.get_ticks()
             self.world.player.break_start_time = time
+            self.world.player.break_mult = mail.mult if mail.mult is not None else 1
         elif mail.compare(constants.MAIL_BUILDING_AVAILABLE_RESPONSE):
             self.world.player.building_available = mail.available
         elif mail.compare(constants.MAIL_REFRESH_BUILDING_INTERACT):

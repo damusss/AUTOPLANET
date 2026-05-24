@@ -1,0 +1,9 @@
+{
+    "display_name": "Better Chip",
+    "description": "NOTIMPLEMENTED",
+    "path_name": "Better Chip Path",
+    "required_chip": 1,
+    "require_processor": false,
+    "required_nodes": [],
+    "unlocks": ["research_chip_2", "laboratory"]
+}

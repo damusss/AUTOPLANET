@@ -1,8 +1,19 @@
 {
     "size": [2, 2],
     "inventory_kind": "output",
-    "floor_whitelist": [
-        "nylium",
-        "nylium_surface"
-    ]
+    "floor_whitelist": ["nylium", "nylium_surface"],
+    "vegetation_requirement": "nylium_grass",
+    "states": {
+        "on": {
+            "default_image": true,
+            "light": {
+                "radius": 4,
+                "intensity": 170,
+                "color": "#AA00CC"
+            }
+        },
+        "off": {
+            "default": true
+        }
+    }
 }

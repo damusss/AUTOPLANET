@@ -64,9 +64,16 @@ PLAYER_ENERGY_DEPLEAT_SPEED = 65
 PLAYER_ENERGY_REGEN_SPEED = 300
 
 PLAYER_MAX_HEALTH = 100
+PLAYER_HEALTH_REGEN_COOLDOWN = 2000
+PLAYER_HEALTH_REGEN_AMOUNT = 2
+
+MOLD_BREAK_DAMAGE_COOLDOWN = 500
+MOLD_BREAK_DAMAGE = 10
 
 IDLE_FRAME_SPEED = 0.35
 RUN_FRAME_SPEED = 0.1
+
+REITERATE_BREAK_TIME_MULT = 0.5
 
 # inventory
 INVENTORY_COLS = 8
@@ -126,12 +133,14 @@ RAYCAST_EMPTY = "empty"
 RAYCAST_DROP = "drop"
 RAYCAST_TILE = "tile"
 RAYCAST_BUILDING = "building"
+RAYCAST_VEGETATION = "vegetation"
 RAYCAST_UI_ITEM = "item"
 RAYCAST_UI_SLOT_FILTER = "slot_filter"
 
 RAYCASTFLAG_CHUNK = "chunk"
 RAYCASTFLAG_DEFAULT = "default"
 RAYCASTFLAG_COLLIDER = "collider"
+RAYCASTFLAG_VEGETATION = "vegetation"
 RAYCASTFLAG_INFO = "info"
 RAYCASTFLAG_ALL = "all"
 
@@ -158,11 +167,14 @@ BUILDING_STATUS_MISSING_FLOOR_AND_TILE = "mft"
 BUILDING_STATUS_OBSTRUCTED = "o"
 BUILDING_STATUS_PLAYER_IN_THE_WAY = "pitw"
 BUILDING_STATUS_TOO_FAR = "tf"
+BUILDING_STATUS_MISSING_VEGETATION = "mv"
 BUILDING_STATUS_AVAILABLE = "a"
 
 TILE_PLACED = "p"
 TILE_BACKGROUND_FLIP = "b"
 TILE_PLACED_BACKGROUND_FLIP = "pb"
+
+VEGETATION_MAX_SIZE = 4
 
 ENDPOINT_MACHINE = "machine"
 
@@ -279,6 +291,7 @@ BUILDING_STATUS_MESSAGES = {
     BUILDING_STATUS_WRONG_AND_MISSING_FLOOR: "Requires a floor and of the correct kind.",
     BUILDING_STATUS_MISSING_FLOOR_AND_TILE: "Can only be placed without flooring when on top of background tiles.",
     BUILDING_STATUS_PLAYER_IN_THE_WAY: "Player is obstructing the building.",
+    BUILDING_STATUS_MISSING_VEGETATION: "Can only be placed on top of a <vegetation>",
 }
 
 
@@ -367,7 +380,9 @@ ICON_SVG_SIZE = 256
 # debug
 DEBUG_PLAYER_HITBOX_COL = "green"
 DEBUG_TILE_HITBOX_COL = "blue"
-PRINT_FPS_COOLDOWN = 2
+DEBUG_VEGETATION_HITBOX_COLOR = "yellow"
+DEBUG_CHUNK_BORDER_COLOR = "red"
+DISPLAY_FPS_COOLDOWN = 2
 MAX_CLIENT_CONNECTIONS_PER_BUILDING = 10
 
 
@@ -396,7 +411,7 @@ MAIL_CHUNK_UNLOAD = _mail_id(), ("chunk_keys",)
 MAIL_INPUT_DIR = _mail_id(), ("dir",)
 MAIL_INPUT_EVENT = _mail_id(), ("input_type", "button")
 MAIL_MOUSE_POS = _mail_id(), ("pos",)
-MAIL_BREAK_START = _mail_id(), ("time",)
+MAIL_BREAK_START = _mail_id(), ("time", "mult")
 MAIL_INVENTORY_ACTION = _mail_id(), ("action", "source", "dest", "amount")
 MAIL_CRAFT_REQUEST = _mail_id(), ("item_uid",)
 MAIL_BUILDING_AVAILABLE = _mail_id(), ("building_uid", "pos")

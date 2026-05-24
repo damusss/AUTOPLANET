@@ -28,7 +28,7 @@ class CameraUI:
             self.render_break_anim(
                 god.player.break_start_time,
                 god.player.raycast.hitbox.center,
-                god.player.raycast.object_data.break_time_s,
+                god.player.raycast.object_data.break_time_s * god.player.break_mult,
                 [god.player.raycast.object_data.uid, god.player.raycast.data[0]]
                 if god.player.raycast.type == constants.RAYCAST_BUILDING
                 else None,

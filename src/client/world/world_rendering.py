@@ -155,10 +155,15 @@ class WorldRendering:
         self.renderer.draw_color = constants.DEBUG_PLAYER_HITBOX_COL
         player_hitbox = god.player.hitbox
         self.renderer.draw_rect(god.camera.rect_to_screen(player_hitbox))
-        self.renderer.draw_color = constants.DEBUG_TILE_HITBOX_COL
         player_hitbox = player_hitbox.inflate(0.2, 0.1)
         for chunk in god.world.loaded_chunks.values():
             if player_hitbox.colliderect(chunk.world_rect):
+                self.renderer.draw_color = constants.DEBUG_VEGETATION_HITBOX_COLOR
+                for veg in chunk.vegetation:
+                    self.renderer.draw_rect(
+                        god.camera.rect_to_screen(veg[1]).inflate(-2, -2)
+                    )
+                self.renderer.draw_color = constants.DEBUG_TILE_HITBOX_COL
                 for hitbox in chunk.tile_hitboxes.values():
                     self.renderer.draw_rect(god.camera.rect_to_screen(hitbox))
                 for bd in chunk.static_buildings:
@@ -170,6 +175,8 @@ class WorldRendering:
                                 )
                             )
                         )
+                self.renderer.draw_color = constants.DEBUG_CHUNK_BORDER_COLOR
+                self.renderer.draw_rect(god.camera.rect_to_screen(chunk.world_rect))
         for px, py, uid, amount in god.world.drops_data:
             rect = (
                 px - constants.DROP_SIZE / 2,
@@ -278,12 +285,17 @@ class WorldRendering:
         self.renderer.draw_color = 0
         self.renderer.clear()
 
+        vegetation_layers = []
         building_layers = []
         for chunk in god.world.loaded_chunks.values():
             if "tiles" in chunk.layers:
                 chunk.layers["tiles"].render(self.renderer)
+            if "vegetation" in chunk.layers:
+                vegetation_layers.append(chunk.layers["vegetation"])
             if "static_buildings" in chunk.layers:
                 building_layers.append(chunk.layers["static_buildings"])
+        for layer in vegetation_layers:
+            layer.render(self.renderer)
         for layer in building_layers:
             layer.render(self.renderer)
         self.render_drops()

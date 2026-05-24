@@ -1,0 +1,7 @@
+{
+    "display_name": "Cactus",
+    "description": "NOTIMPLEMENTED",
+    "size": [1, 1],
+    "break_time_s": 1,
+    "item_drop": [["nylium_fiber", 1]]
+}

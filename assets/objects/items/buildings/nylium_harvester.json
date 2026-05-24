@@ -8,7 +8,7 @@
         "recipe": [
             ["core_brick", 15],
             ["microchip", 1],
-            ["plastic", 10]
+            ["plastic", 20]
         ]
     }
 }

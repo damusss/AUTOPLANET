@@ -6,7 +6,7 @@ from src import shared
 from src import constants
 from src.server import god
 from src.server import terrain
-from src.object_data import Star, Dust, BigStar, BlackHole, TileOD
+from src.object_data import Star, Dust, BigStar, BlackHole, VegetationOD
 from src.server.drop import Drop
 from src.server.energy import EnergyProvider
 
@@ -29,6 +29,7 @@ class Chunk:
         self.loaded_client_players = []
         self.tile_hitboxes: list[pygame.FRect] = []
         self.tile_hitboxes_table: dict[tuple[int, int], pygame.FRect] = {}
+        self.vegetation = []  # (tile x, tile y, type ID, hitbox)
         self.lights = []  # (cx, cy, radius, intensity, rgb)
         self.stars = []  # (cx, cy, size)
         self.dusts = []  # (cx, cy, size, rgb)
@@ -83,7 +84,9 @@ class Chunk:
                 wy = self.world_topleft.y + cy
                 biome_handler, rel_y = terrain.get_biome_handler(wy, height)
                 if biome_handler is not None:
-                    tile_data = biome_handler(rel_y, cx + self.world_topleft.x)
+                    tile_data, plant_data = biome_handler(
+                        rel_y, cx + self.world_topleft.x, self.world_topleft.y + cy
+                    )
                     if tile_data is not None:
                         self.tiles_mat[cy * constants.CHUNK_SIZE + cx] = tile_data
                         if tile_data[1]:
@@ -95,6 +98,26 @@ class Chunk:
                             )
                             self.tile_hitboxes.append(rect)
                             self.tile_hitboxes_table[(cx, cy)] = rect
+                    if (
+                        plant_data is not None
+                        and (plant_data[1] - self.world_topleft.y) >= 0
+                    ):
+                        plant_od: VegetationOD = plant_data[2]
+                        self.vegetation.append(
+                            [
+                                plant_data[0] - self.world_topleft.x,
+                                plant_data[1] - self.world_topleft.y,
+                                plant_od.uid,
+                                pygame.FRect(
+                                    0, 0, plant_od.size[0], plant_od.size[1]
+                                ).move_to(
+                                    midbottom=(
+                                        plant_data[0] + 0.5,
+                                        plant_data[1] + 1,
+                                    )
+                                ),
+                            ]
+                        )
 
     def generate_stars(self):
         for cx in range(constants.CHUNK_SIZE):
@@ -177,6 +200,7 @@ class Chunk:
             "big_star": self.big_star,
             "tiles": self.tiles_mat,
             "lights": self.lights,
+            "vegetation": [[veg[0], veg[1], veg[2]] for veg in self.vegetation],
             "buildings": [building.get_client_data() for building in self.buildings],
             "energy": sum(
                 (

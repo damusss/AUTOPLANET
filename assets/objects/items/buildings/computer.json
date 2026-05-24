@@ -8,7 +8,7 @@
         "recipe": [
             ["microchip", 4],
             ["cables", 4],
-            ["remote_controller", 1]
+            ["plastic", 3]
         ]
     }
 }

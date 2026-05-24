@@ -29,7 +29,10 @@ class Drop:
         )
 
     def destroy(self):
-        self.chunk.drops.remove(self)
+        try:
+            self.chunk.drops.remove(self)
+        except ValueError:
+            ...
 
     def get_client_data(self):
         return [

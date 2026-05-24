@@ -7,7 +7,7 @@ from src import shared
 from src import constants
 from src.server import god
 from src.server import terrain
-from src.object_data import ItemOD
+from src.object_data import ItemOD, TileOD
 from src.server.inventory import Inventory
 
 if typing.TYPE_CHECKING:
@@ -28,6 +28,9 @@ class Player:
         self.craft_queue: deque[shared.CraftQueueItem] = deque()
         self.break_start_time = None
         self.break_data: shared.RaycastHit = None
+        self.break_count: int = 0
+        self.last_mold_damage = 0
+        self.last_regen = 0
 
         self.client_frame_kind = "idle"
         self.client_frame_index = 0
@@ -125,11 +128,25 @@ class Player:
                 self.client_building_preview = None
             self.client_building_preview_clear_after -= 1
 
+        health_dirty = False
+        if self.health < constants.PLAYER_MAX_HEALTH:
+            if (
+                pygame.time.get_ticks() - self.last_regen
+                >= constants.PLAYER_HEALTH_REGEN_COOLDOWN
+            ):
+                self.last_regen = pygame.time.get_ticks()
+                self.health = pygame.math.clamp(
+                    self.health + constants.PLAYER_HEALTH_REGEN_AMOUNT,
+                    0,
+                    constants.PLAYER_MAX_HEALTH,
+                )
+                health_dirty = True
+
         self.handle_mouse_input()
         self.handle_craft_queue()
 
         self.mail_physics(drops_data, moving_data)
-        if self.inventory.dirty:
+        if self.inventory.dirty or health_dirty:
             self.mail_stats()
 
     def handle_craft_queue(self):
@@ -165,7 +182,7 @@ class Player:
                 "ba": [
                     shared.eval_delta(player.break_start_time),
                     player.break_data.hitbox.center,
-                    player.break_data.object_data.break_time_s,
+                    player.break_data.object_data.break_time_s * player.break_mult,
                     [player.break_data.object_data.uid, player.break_data.data[0]]
                     if player.break_data.type == constants.RAYCAST_BUILDING
                     else None,
@@ -196,7 +213,13 @@ class Player:
         )
         self.inventory.dirty = False
 
+    @property
+    def break_mult(self):
+        return constants.REITERATE_BREAK_TIME_MULT if (self.break_count > 0) else 1
+
     def handle_mouse_input(self):
+        if not self.client_mouse_pressing:
+            self.break_count = 0
         if self.break_data is not None:
             if (
                 self.raycast is None
@@ -205,26 +228,32 @@ class Player:
                 or self.break_data.hitbox != self.raycast.hitbox
             ):
                 self.break_data = None
-                self.client.conn.mail(constants.MAIL_BREAK_START, time=None)
+                self.client.conn.mail(constants.MAIL_BREAK_START, time=None, mult=None)
             else:
                 if (
                     pygame.time.get_ticks() - self.break_start_time
-                    >= self.break_data.object_data.break_time_s * 1000
+                    >= self.break_data.object_data.break_time_s * 1000 * self.break_mult
                 ):
                     god.world.break_raycast(
                         self.break_data,
                         self.inventory.slots[constants.INVENTORY_HAND_I].item,
                     )
-                    self.client.conn.mail(constants.MAIL_BREAK_START, time=None)
+                    self.break_count += 1
+                    self.client.conn.mail(
+                        constants.MAIL_BREAK_START, time=None, mult=None
+                    )
         else:
             if (
                 self.client_mouse_pressing
                 and self.raycast is not None
                 and self.raycast.type != constants.RAYCAST_EMPTY
             ):
-                if (
+                close_enough = (
                     self.pos.distance_to(self.raycast.hitbox.center)
                     <= constants.PLAYER_REACH_RADIUS
+                )
+                if (
+                    close_enough
                     and hasattr(self.raycast.object_data, "break_requirements")
                     and (
                         self.raycast.object_data.break_requirements is None
@@ -236,7 +265,25 @@ class Player:
                 ):
                     self.break_data = self.raycast
                     self.break_start_time = pygame.time.get_ticks()
-                    self.client.conn.mail(constants.MAIL_BREAK_START, time="now")
+                    self.client.conn.mail(
+                        constants.MAIL_BREAK_START, time="now", mult=self.break_mult
+                    )
+                else:
+                    if (
+                        close_enough
+                        and self.raycast.object_data == TileOD.objects.mold_patch
+                    ):
+                        if (
+                            pygame.time.get_ticks() - self.last_mold_damage
+                            >= constants.MOLD_BREAK_DAMAGE_COOLDOWN
+                        ):
+                            self.health = pygame.math.clamp(
+                                self.health - constants.MOLD_BREAK_DAMAGE,
+                                0,
+                                constants.PLAYER_MAX_HEALTH,
+                            )
+                            self.mail_stats()
+                            self.last_mold_damage = pygame.time.get_ticks()
 
     def collisions_x(self, rects: list[pygame.FRect]):
         prev_hitbox = self.hitbox

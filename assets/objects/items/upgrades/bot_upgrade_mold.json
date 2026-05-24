@@ -9,7 +9,8 @@
         "recipe": [
             ["diamond", 1],
             ["ammonia", 10],
-            ["mold_spray", 1]
+            ["mold_spray", 1],
+            ["remote_controller", 1]
         ]
     }
 }

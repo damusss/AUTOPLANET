@@ -163,6 +163,9 @@ class ObjectData:
     def get_type(type_name: str) -> "type[ObjectData]":
         return ObjectData._registered_types_[type_name]
 
+    @staticmethod
+    def global_setup(): ...
+
 
 class TileOD(ObjectData, type_name="Tile"):
     DEFAULTS = {"miner_time_s": 0}
@@ -278,7 +281,8 @@ class BuildingOD(ObjectData, type_name="Building"):
         "energy_radius": 0,
         "energy_endpoint_type": "machine",
         "hitbox_multiplier": 1,
-        "inventory_kind": None
+        "inventory_kind": None,
+        "vegetation_requirement": None,
     }
 
     size: tuple[int, int]
@@ -293,11 +297,12 @@ class BuildingOD(ObjectData, type_name="Building"):
     hitbox_multiplier: float
     altitude_range: tuple[int, int] | None
     floor_whitelist: list["TileOD | BuildingOD"]
+    vegetation_requirement: "VegetationOD|None"
     restore_tile: TileOD | None
     break_requirements: list[ItemOD]
     states: dict[str, BuildingStateData]
     energy_endpoint_type: str
-    inventory_kind: str|None
+    inventory_kind: str | None
 
     @property
     def item(self):
@@ -348,11 +353,76 @@ class BuildingOD(ObjectData, type_name="Building"):
                 states["default"] = state
         self.states = states
         self.break_requirements = [ItemOD.get(req) for req in self.break_requirements]
+        if self.vegetation_requirement is not None:
+            self.vegetation_requirement = VegetationOD.get(self.vegetation_requirement)
         self.description = self.item.description
         self.display_name = self.item.display_name
 
 
-class VegetationOD(ObjectData, type_name="Vegetation"): ...
+class VegetationOD(ObjectData, type_name="Vegetation"):
+    DEFAULTS = {
+        "break_requirements": None,
+        "item_drop": None,
+        "light": None,
+        "require_floor": True,
+    }
+
+    size: tuple[float, float]
+    break_time_s: float
+    break_requirements: list[ItemOD]
+    light: LightData | None
+    item_drop: list[tuple["ItemOD", int]]
+    require_floor: bool
+
+    def setup(self):
+        if self.light is not None:
+            self.light = LightData(
+                self.light["radius"], self.light["intensity"], self.light["color"]
+            )
+
+    def post_setup(self):
+        if self.item_drop is None:
+            self.item_drop = []
+        drop = []
+        for name_id, amount in self.item_drop:
+            drop.append((ItemOD.get(name_id), amount))
+        self.item_drop = drop
+        if self.break_requirements is not None:
+            self.break_requirements = [
+                ItemOD.get(req) for req in self.break_requirements
+            ]
+
+
+ITEMS_STARTER_PACK: set[str] = set()
+
+
+class ResearchNodeOD(ObjectData, type_name="ResearchNode"):
+    DEFAULTS = {"require_processor": True}
+
+    path_name: str
+    unlocks: list[ItemOD]
+    required_chip: ItemOD
+    required_nodes: list["ResearchNodeOD"]
+    require_processor: bool
+
+    def post_setup(self):
+        self.required_chip = ItemOD.get(f"research_chip_{self.required_chip}")
+        nodes = []
+        for node_name in self.required_nodes:
+            nodes.append(ResearchNodeOD.get(node_name))
+        self.required_nodes = nodes
+        unlocks = []
+        for item in self.unlocks:
+            unlocks.append(ItemOD.get(item))
+        self.unlocks = unlocks
+
+    @staticmethod
+    def global_setup():
+        all_item_names = set(ItemOD.get_all().keys())
+        for research_node in ResearchNodeOD.get_list():
+            for item in research_node.unlocks:
+                all_item_names.discard(item.name_id)
+        ITEMS_STARTER_PACK.update(all_item_names)
 
 
 class BigStar(ObjectSingleton):
@@ -384,6 +454,7 @@ def load_all(objects_folder: str):
     with open(os.path.join(objects_folder, "_registry_.json"), "r") as reg_file:
         registry = json.load(reg_file)
     object_datas: list[ObjectData] = []
+    object_types: list[type[ObjectData]] = []
     for folder in os.listdir(objects_folder):
         if folder.startswith("_registry_") or folder.startswith("_singletons_"):
             continue
@@ -412,6 +483,7 @@ def load_all(objects_folder: str):
             else:
                 free_id = max(registry[type_name].values()) + 1
         data_type: type[ObjectData] = ObjectData._registered_types_[type_name]
+        object_types.append(data_type)
         for cur_dir, _, files in os.walk(subdir_path):
             for file_name in files:
                 if file_name.startswith("_type_"):
@@ -430,6 +502,8 @@ def load_all(objects_folder: str):
                 object_datas.append(od)
     for od in object_datas:
         od.post_setup()
+    for ot in object_types:
+        ot.global_setup()
     for singleton_file in os.listdir(os.path.join(objects_folder, "_singletons_")):
         with open(
             os.path.join(objects_folder, "_singletons_", singleton_file), "r"

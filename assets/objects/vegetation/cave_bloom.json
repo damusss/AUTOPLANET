@@ -1,0 +1,12 @@
+{
+    "display_name": "Cave Bloom",
+    "description": "NOTIMPLEMENTED",
+    "size": [1, 1],
+    "break_time_s": 1.5,
+    "require_floor": false,
+    "light": {
+        "radius": 7,
+        "intensity": 70,
+        "color": "#68cc68"
+    }
+}

@@ -3,6 +3,7 @@ import pygame
 from src import shared
 from src import constants
 from src.server import god
+from src.object_data import VegetationOD
 from src.server.building import Building, BuildingExt
 
 
@@ -79,6 +80,14 @@ class EnergyPlant(BuildingExt, name_id="energy_plant"):
             god.world.disrupt_alerted_plants.add(self.building.id)
 
     def on_place(self):
+        oxygen_raycast = god.world.raycast(
+            (self.building.hitbox.centerx, self.building.hitbox.centery + 0.5),
+            constants.RAYCASTFLAG_VEGETATION,
+        )
+        self.building.has_energy = (
+            oxygen_raycast is not None
+            and oxygen_raycast.object_data == VegetationOD.objects.oxygen_plant
+        )
         chunks = god.world.load_or_get_chunks(
             shared.get_chunk_keys_colliding_circle(
                 self.provider.center, self.provider.radius
@@ -104,7 +113,8 @@ class EnergyPlant(BuildingExt, name_id="energy_plant"):
                 ):
                     EnergyConn(self, building.ext).finalize()
             chunk.energy_providers.add(self.provider)
-        self.send_energy_activation()
+        if self.building.has_energy:
+            self.send_energy_activation()
 
     def send_energy_activation(self):
         for conn in self.energy_conns:

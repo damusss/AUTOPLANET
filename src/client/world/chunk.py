@@ -5,7 +5,7 @@ import pygame
 from src import shared
 from src import constants
 from src.client import god
-from src.object_data import BigStar, BlackHole, TileOD, BuildingOD
+from src.object_data import BigStar, BlackHole, TileOD, BuildingOD, VegetationOD
 from src.client.rendering import (
     MeshRenderingLayer,
     TextureRenderingLayer,
@@ -94,13 +94,34 @@ class Chunk:
         )
         self.static_buildings = [BuildingDataHolder(bd) for bd in data["buildings"]]
         self.energy_conns = {}
+        self.trajectory_conns = set()
+        self.load_connections(data)
+        self.lights = []
+        self.load_lights(data)
+        self.vegetation: list[tuple[VegetationOD, pygame.FRect]] = []
+        self.load_vegetation(data)
+
+        self.stars = data["stars"]
+        self.dusts = data["dusts"]
+        self.big_star = data["big_star"]
+        self.tiles_mat = data["tiles"]
+
+        self.tile_hitboxes = {}
+        self.tiles_texture: Texture = None
+        self.static_buildings_texture: Texture = None
+
+        self.layers: dict[str, TextureRenderingLayer] = {}
+        thread = threading.Thread(target=self.render_static)
+        thread.start()
+
+    def load_connections(self, data):
         for a, b, energy in data["energy"]:
             self.energy_conns[frozenset({tuple(a), tuple(b)})] = energy
-        self.trajectory_conns = set()
         for a, b in data["traj"]:
             key = (tuple(a), tuple(b))
             self.trajectory_conns.add(key)
-        self.lights = []
+
+    def load_lights(self, data):
         for light in data["lights"]:
             self.lights.append(
                 LightData(
@@ -125,18 +146,30 @@ class Chunk:
                     )
                 )
 
-        self.stars = data["stars"]
-        self.dusts = data["dusts"]
-        self.big_star = data["big_star"]
-        self.tiles_mat = data["tiles"]
-
-        self.tile_hitboxes = {}
-        self.tiles_texture: Texture = None
-        self.static_buildings_texture: Texture = None
-
-        self.layers: dict[str, TextureRenderingLayer] = {}
-        thread = threading.Thread(target=self.render_static)
-        thread.start()
+    def load_vegetation(self, data):
+        for rel_x, rel_y, plant_uid in data["vegetation"]:
+            plant_od = VegetationOD.get(plant_uid)
+            hitbox = pygame.FRect(0, 0, plant_od.size[0], plant_od.size[1]).move_to(
+                midbottom=(
+                    self.world_topleft.x + rel_x + 0.5,
+                    self.world_topleft.y + rel_y + 1,
+                )
+            )
+            self.vegetation.append(
+                [
+                    plant_od,
+                    hitbox,
+                ]
+            )
+            if plant_od.light is not None:
+                self.lights.append(
+                    LightData(
+                        hitbox.center,
+                        plant_od.light.radius,
+                        plant_od.light.intensity,
+                        plant_od.light.color,
+                    )
+                )
 
     def get_tile(self, tile_pos):
         return self.tiles_mat[tile_pos[1] * constants.CHUNK_SIZE + tile_pos[0]]
@@ -281,6 +314,22 @@ class Chunk:
             None,
         )
 
+    def render_vegetation(self):
+        padding = constants.VEGETATION_MAX_SIZE - 1
+        surf_w = (constants.CHUNK_SIZE + (padding) * 2) * constants.TILE_PX
+        surface = pygame.Surface((surf_w, surf_w), pygame.SRCALPHA)
+        for plant_od, hitbox in self.vegetation:
+            image = god.assets.vegetation[plant_od.name_id]
+            rel_x = hitbox.left - self.world_topleft.x + padding
+            rel_y = hitbox.top - self.world_topleft.y + padding
+            surface.blit(image, (rel_x * constants.TILE_PX, rel_y * constants.TILE_PX))
+        self.vegetation_texture = Texture.from_surface(god.windowing.renderer, surface)
+        self.layers["vegetation"] = TextureRenderingLayer(
+            self.vegetation_texture,
+            self.world_rect.inflate(padding * 2, padding * 2),
+            None,
+        )
+
     def render_static(self):
         if len(self.stars) > 0 and "stars" not in self.layers:
             self.render_stars()
@@ -291,9 +340,12 @@ class Chunk:
         self.render_tiles()
         if len(self.static_buildings) > 0:
             self.render_static_buildings()
+        if len(self.vegetation) > 0:
+            self.render_vegetation()
 
     def unload(self):
         self.loaded = False
         self.tiles_texture = None
         self.static_buildings_texture = None
+        self.vegetation_texture = None
         self.layers.clear()

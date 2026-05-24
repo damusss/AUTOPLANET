@@ -4,12 +4,13 @@ import pygame
 
 from src import shared
 from src import constants
+from src import object_data
 from src.server import god
 from src.timerc import timerc
 from src.server import terrain
 from src.server import building
 from src.server import buildings
-from src.object_data import TileOD, BuildingOD, ItemOD
+from src.object_data import TileOD, BuildingOD, ItemOD, VegetationOD
 from src.server.drop import Drop
 from src.server.chunk import Chunk
 from src.server.player import Player
@@ -21,12 +22,9 @@ class World:
     def __init__(self):
         god.world = self
         self.dt = 0
-        self.seeds = {
-            "surface": terrain.get_random_seed(),
-            "core": (terrain.get_random_seed(), terrain.get_random_seed()),
-            "iron_ore": (terrain.get_random_seed(), terrain.get_random_seed()),
-            "copper_ore": (terrain.get_random_seed(), terrain.get_random_seed()),
-        }
+        self.seeds = {"surface": terrain.get_random_seed()}
+        for ore in terrain.DISTRIBUTION_SETTINGS:
+            self.seeds[ore.name] = terrain.get_random_2d_seed()
         self.players: dict[int, Player] = {}
         self.clock = pygame.Clock()
         self.chunks: dict[str, Chunk] = {}
@@ -34,13 +32,16 @@ class World:
         self.refresh_queued_chunks = set()
         self.disrupt_alerted_buildings = set()
         self.disrupt_alerted_plants = set()
-        timerc.add(constants.PRINT_FPS_COOLDOWN, self.print_fps)
+        self.computers_count = 0
+        self.unlocked_nodes: set[str] = set()
+        self.unlocked_items: set[str] = object_data.ITEMS_STARTER_PACK.copy()
+        timerc.add(constants.DISPLAY_FPS_COOLDOWN, self.display_fps)
         building.EnergyConn_t = EnergyConn
         assert buildings
 
-    def print_fps(self):
+    def display_fps(self):
         shared.log(f"FPS: {self.clock.get_fps():.0f}")
-        return self.print_fps
+        return self.display_fps
 
     def player_connect(self, client):
         player = Player(client)
@@ -311,24 +312,79 @@ class World:
         building.chunk.refresh_pending = False
         self.refresh_chunk(building.chunk)
         if building.building_od.floor:
-            self.break_building_on_top(building.hitbox.center - pygame.Vector2(0, 1))
+            self.break_object_on_top(building.hitbox.center - pygame.Vector2(0, 1))
 
-    def break_building_on_top(self, top_pos):
+    def break_object_on_top(self, top_pos):
         ray = self.raycast(top_pos)
-        if ray is None:
-            return
-        if ray.type == constants.RAYCAST_BUILDING:
-            if ray.data[0] in self.buildings:
-                building = self.buildings[ray.data[0]]
-                if building.require_floor:
-                    self.break_building(building)
-        elif ray.type == constants.RAYCAST_TILE:
-            if ray.hitbox is not None and ray.tile_data is not None:
+        if ray is not None:
+            if ray.type == constants.RAYCAST_BUILDING:
+                if ray.data[0] in self.buildings:
+                    building = self.buildings[ray.data[0]]
+                    if building.require_floor:
+                        self.break_building(building)
+            elif ray.type == constants.RAYCAST_TILE:
+                if ray.hitbox is not None and ray.tile_data is not None:
+                    if (
+                        len(ray.tile_data) == 4
+                        and constants.TILE_PLACED in ray.tile_data[3]
+                    ):
+                        self.break_raycast(ray)
+                        return
+        ray = self.raycast(top_pos, constants.RAYCASTFLAG_VEGETATION)
+        if ray is not None:
+            if ray.object_data.require_floor:
+                self.break_raycast(ray)
+
+    def break_tile(self, tile_data, chunk: Chunk, raycast: shared.RaycastHit):
+        tile_data[1] = 0
+        also_refresh = None
+        if len(tile_data) == 4 and constants.TILE_PLACED in tile_data[3]:
+            chunk.tiles_mat[chunk.get_tile_index(raycast.tile_pos)] = None
+            ray_bottom = self.raycast(
+                (
+                    raycast.tile_pos[0] + chunk.world_topleft.x,
+                    chunk.world_topleft.y + raycast.tile_pos[1] + 1.5,
+                ),
+                constants.RAYCASTFLAG_ALL,
+            )
+            if ray_bottom is not None and ray_bottom.type == constants.RAYCAST_TILE:
                 if (
-                    len(ray.tile_data) == 4
-                    and constants.TILE_PLACED in ray.tile_data[3]
+                    len(ray_bottom.tile_data) == 4
+                    and constants.TILE_BACKGROUND_FLIP in ray_bottom.tile_data[3]
                 ):
-                    self.break_raycast(ray)
+                    ray_bottom.tile_data[0] = TileOD.objects.nylium_surface.uid
+                    if ray_bottom.tile_data[3] == constants.TILE_BACKGROUND_FLIP:
+                        ray_bottom.tile_data.pop(3)
+                    else:
+                        ray_bottom.tile_data[3] = constants.TILE_PLACED
+                    also_refresh = ray_bottom.chunk_key
+        top_pos = None
+        if raycast.tile_pos in chunk.tile_hitboxes_table:
+            hitbox = chunk.tile_hitboxes_table.pop(raycast.tile_pos)
+            top_pos = hitbox.center - pygame.Vector2(0, 1)
+            chunk.tile_hitboxes.remove(hitbox)
+            tile_od = TileOD.get(tile_data[0])
+            for drop in tile_od.item_drop:
+                self.drop(
+                    shared.get_drop_random_pos(hitbox),
+                    drop[0],
+                    drop[1],
+                )
+        self.refresh_chunk(chunk)
+        if also_refresh is not None and also_refresh != chunk.chunk_key:
+            self.refresh_chunk(also_refresh)
+        if top_pos is not None:
+            self.break_object_on_top(top_pos)
+
+    def break_vegetation(self, chunk: Chunk, raycast: shared.RaycastHit):
+        for veg_data in list(chunk.vegetation):
+            if (
+                veg_data[0] == raycast.tile_pos[0]
+                and veg_data[1] == raycast.tile_pos[1]
+            ):
+                chunk.vegetation.remove(veg_data)
+                chunk.refresh()
+                return
 
     def break_raycast(self, raycast: shared.RaycastHit, tool: ItemOD | None = None):
         chunk = self.chunks[raycast.chunk_key]
@@ -336,48 +392,12 @@ class World:
             tile_data = chunk.get_tile(raycast.tile_pos)
             if tile_data[1] == 0:
                 return
-            tile_data[1] = 0
-            also_refresh = None
-            if len(tile_data) == 4 and constants.TILE_PLACED in tile_data[3]:
-                chunk.tiles_mat[chunk.get_tile_index(raycast.tile_pos)] = None
-                ray_bottom = self.raycast(
-                    (
-                        raycast.tile_pos[0] + chunk.world_topleft.x,
-                        chunk.world_topleft.y + raycast.tile_pos[1] + 1.5,
-                    ),
-                    constants.RAYCASTFLAG_ALL,
-                )
-                if ray_bottom is not None and ray_bottom.type == constants.RAYCAST_TILE:
-                    if (
-                        len(ray_bottom.tile_data) == 4
-                        and constants.TILE_BACKGROUND_FLIP in ray_bottom.tile_data[3]
-                    ):
-                        ray_bottom.tile_data[0] = TileOD.objects.nylium_surface.uid
-                        if ray_bottom.tile_data[3] == constants.TILE_BACKGROUND_FLIP:
-                            ray_bottom.tile_data.pop(3)
-                        else:
-                            ray_bottom.tile_data[3] = constants.TILE_PLACED
-                        also_refresh = ray_bottom.chunk_key
-            top_pos = None
-            if raycast.tile_pos in chunk.tile_hitboxes_table:
-                hitbox = chunk.tile_hitboxes_table.pop(raycast.tile_pos)
-                top_pos = hitbox.center - pygame.Vector2(0, 1)
-                chunk.tile_hitboxes.remove(hitbox)
-                tile_od = TileOD.get(tile_data[0])
-                for drop in tile_od.item_drop:
-                    self.drop(
-                        shared.get_drop_random_pos(hitbox),
-                        drop[0],
-                        drop[1],
-                    )
-            self.refresh_chunk(chunk)
-            if also_refresh is not None and also_refresh != chunk.chunk_key:
-                self.refresh_chunk(also_refresh)
-            if top_pos is not None:
-                self.break_building_on_top(top_pos)
+            self.break_tile(tile_data, chunk, raycast)
         elif raycast.type == constants.RAYCAST_BUILDING:
             if raycast.data[0] in self.buildings:
                 self.break_building(self.buildings[raycast.data[0]], tool)
+        elif raycast.type == constants.RAYCAST_VEGETATION:
+            self.break_vegetation(chunk, raycast)
 
     def air_valid_for_building(
         self, building: BuildingOD, ray: shared.RaycastHit, topleft: pygame.Vector2
@@ -430,6 +450,19 @@ class World:
         topleft = shared.get_building_topleft(pos, building_od.size)
         ret_valid_f = constants.BUILDING_STATUS_AVAILABLE
         do_return_f = False
+        if building_od.vegetation_requirement is not None:
+            veg_ray = self.raycast(
+                (
+                    topleft.x + building_od.size[0] / 2,
+                    topleft.y + building_od.size[1] / 2 + building_od.size[1] / 4,
+                ),
+                constants.RAYCASTFLAG_VEGETATION,
+            )
+            if (
+                veg_ray is None
+                or veg_ray.object_data != building_od.vegetation_requirement
+            ):
+                return constants.BUILDING_STATUS_MISSING_VEGETATION
         if building_od.floor:
             chunk_key = shared.get_chunk_key(shared.get_chunk_pos(topleft))
             if chunk_key in self.chunks:
@@ -633,6 +666,19 @@ class World:
             int(pos.x - chunk.world_topleft.x),
             int(pos.y - chunk.world_topleft.y),
         )
+        if flag == constants.RAYCASTFLAG_VEGETATION:
+            for rel_x, rel_y, plant_uid, hitbox in chunk.vegetation:
+                if hitbox.collidepoint(pos):
+                    return shared.RaycastHit(
+                        chunk_key,
+                        hitbox,
+                        constants.RAYCAST_VEGETATION,
+                        VegetationOD.get(plant_uid),
+                        (rel_x, rel_y),
+                        None,
+                        None,
+                    )
+            return None
         if flag == constants.RAYCASTFLAG_INFO:
             for moving_id in chunk.moving_building_ids:
                 if moving_id in self.buildings:
@@ -660,6 +706,17 @@ class World:
                         tile_pos,
                         None,
                         drop.amount,
+                    )
+            for rel_x, rel_y, plant_uid, hitbox in chunk.vegetation:
+                if hitbox.collidepoint(pos):
+                    return shared.RaycastHit(
+                        chunk_key,
+                        hitbox,
+                        constants.RAYCAST_VEGETATION,
+                        VegetationOD.get(plant_uid),
+                        (rel_x, rel_y),
+                        None,
+                        None,
                     )
         building_id = chunk.building_ids_table.get(tile_pos, None)
         if building_id is not None and building_id in self.buildings:
