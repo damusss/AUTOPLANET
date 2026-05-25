@@ -283,6 +283,7 @@ class BuildingOD(ObjectData, type_name="Building"):
         "hitbox_multiplier": 1,
         "inventory_kind": None,
         "vegetation_requirement": None,
+        "debug_attach_offset": None,
     }
 
     size: tuple[int, int]
@@ -303,6 +304,7 @@ class BuildingOD(ObjectData, type_name="Building"):
     states: dict[str, BuildingStateData]
     energy_endpoint_type: str
     inventory_kind: str | None
+    debug_attach_offset: tuple[float, float]
 
     @property
     def item(self):
@@ -311,6 +313,8 @@ class BuildingOD(ObjectData, type_name="Building"):
     def setup(self):
         if self.floor_whitelist is None:
             self.floor_whitelist = []
+        if self.debug_attach_offset is None:
+            self.debug_attach_offset = (0, 0)
         if self.break_time_s == 0:
             if self.floor:
                 self.break_time_s = constants.DEFAULT_PLATFORM_BREAK_TIME_S

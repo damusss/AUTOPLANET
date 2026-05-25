@@ -116,6 +116,8 @@ class Inventory(CommonInventory):
             ItemOD.objects.pickaxe, 1, [constants.INVENTORY_FILTER_CATEGORY, ["tools"]]
         )
         # temp testing
+        self.add(ItemOD.objects.crafter, 5)
+        self.add(ItemOD.objects.bricks_platform, 100)
         self.add(ItemOD.objects.storage, 10)
         self.add(ItemOD.objects.furnace, 5)
         self.add(ItemOD.objects.miner, 5)

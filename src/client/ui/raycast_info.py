@@ -21,9 +21,9 @@ class RaycastInfoUI:
         col_w = god.windowing.width * constants.UI_RAYCAST_INFO_W_MULT
         cs = col_w * constants.UI_RAYCAST_INFO_CORNER_SIZE_MULT
         if (
-            raycast is None
-            or raycast is constants.UI_RAYCAST_EMPTY
-            or raycast.type == constants.RAYCAST_EMPTY
+                raycast is None
+                or raycast is constants.UI_RAYCAST_EMPTY
+                or raycast.type == constants.RAYCAST_EMPTY
         ):
             self.try_render_building_status(0, col_w, cs)
             return
@@ -51,7 +51,11 @@ class RaycastInfoUI:
                 bottom, raycast, col_w, cs, self.b, self.b * 2
             )
         elif raycast.type == constants.RAYCAST_VEGETATION:
-            bottom = self.render_drops(bottom, raycast, col_w, cs, self.b, self.b * 2)
+            if len(raycast.object_data.item_drop) > 0:
+                bottom = self.render_drops(bottom, raycast, col_w, cs, self.b, self.b * 2)
+            bottom = self.render_object_pos(
+                bottom, raycast, col_w, cs, self.b, self.b * 2
+            )
         elif raycast.type == constants.RAYCAST_UI_ITEM:
             if raycast.filter:
                 bottom = self.render_slot_filter(
@@ -332,8 +336,8 @@ class RaycastInfoUI:
                 "<r1>", god.player.building_preview.altitude_range[0]
             ).replace("<r2>", god.player.building_preview.altitude_range[1])
         elif (
-            god.player.building_available
-            == constants.BUILDING_STATUS_MISSING_VEGETATION
+                god.player.building_available
+                == constants.BUILDING_STATUS_MISSING_VEGETATION
         ):
             status = status.replace(
                 "<vegetation>",
@@ -357,7 +361,7 @@ class RaycastInfoUI:
         return box.bottom
 
     def render_building_floor_whitelist(
-        self, top, building_od: BuildingOD, col_w, cs, bb, b
+            self, top, building_od: BuildingOD, col_w, cs, bb, b
     ):
         content_w = col_w - b * 2
         subtitle_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
@@ -533,7 +537,7 @@ class RaycastInfoUI:
         return box.bottom
 
     def render_building_interaction(
-        self, top, raycast: shared.RaycastHit, col_w, cs, bb, b
+            self, top, raycast: shared.RaycastHit, col_w, cs, bb, b
     ):
         content_w = col_w - b * 2
         box = pygame.Rect(god.windowing.width - bb - col_w, top + bb, col_w, bb)
@@ -541,8 +545,8 @@ class RaycastInfoUI:
         to_draw = []
         if raycast.object_data.interface:
             if (
-                god.player.pos.distance_to(raycast.hitbox.center)
-                <= constants.PLAYER_INTERACT_RADIUS
+                    god.player.pos.distance_to(raycast.hitbox.center)
+                    <= constants.PLAYER_INTERACT_RADIUS
             ):
                 text = "Right click to interact."
                 if raycast.object_data == BuildingOD.objects.bot:

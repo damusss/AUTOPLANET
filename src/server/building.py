@@ -23,7 +23,7 @@ class CommonBuildingExt:
     def __init__(self, building: "Building|MovingBuilding"):
         self.building = building
         self.destroyed = False
-        self.inventories: dict[str, BuildingInventory] = {
+        self.inventories: dict[str, BuildingInventory|None] = {
             "in": None,
             "out": None,
             "upgrade": None,
@@ -81,7 +81,7 @@ class CommonBuildingExt:
 class MovingBuildingExt(CommonBuildingExt):
     REGISTERED_EXTENSIONS: dict[str, type["MovingBuildingExt"]] = {}
 
-    def __init__(self, building: "Building"):
+    def __init__(self, building: "MovingBuilding"):
         super().__init__(building)
         self.init()
 
@@ -89,7 +89,7 @@ class MovingBuildingExt(CommonBuildingExt):
         MovingBuildingExt.REGISTERED_EXTENSIONS[name_id] = cls
 
     @classmethod
-    def create_ext(self, building: "MovingBuilding") -> typing.Self:
+    def create_ext(cls, building: "MovingBuilding") -> "MovingBuildingExt":
         return MovingBuildingExt.REGISTERED_EXTENSIONS.get(
             building.building_od.name_id, MovingBuildingExt
         )(building)
@@ -117,7 +117,7 @@ class BuildingExt(CommonBuildingExt):
         BuildingExt.REGISTERED_EXTENSIONS[name_id] = cls
 
     @classmethod
-    def create_ext(self, building: "Building") -> typing.Self:
+    def create_ext(cls, building: "Building") -> "BuildingExt":
         return BuildingExt.REGISTERED_EXTENSIONS.get(
             building.building_od.name_id, BuildingExt
         )(building)
@@ -180,6 +180,8 @@ class BuildingExt(CommonBuildingExt):
 
     def on_energy_sleep(self): ...
 
+    def get_extra_data(self): ...
+
 
 class Building:
     def __init__(self, id_: str, building_od: BuildingOD, topleft, chunk):
@@ -227,7 +229,7 @@ class Building:
         return [self.id, self.state, self.has_energy]
 
     def get_client_data(self):
-        return [
+        data = [
             self.id,
             self.building_od.uid,
             int(self.hitbox.x),
@@ -235,6 +237,10 @@ class Building:
             self.state,
             self.has_energy,
         ]
+        extra = self.ext.get_extra_data()
+        if extra is not None:
+            data.append(extra)
+        return data
 
 
 class MovingBuilding:
@@ -270,9 +276,9 @@ class MovingBuilding:
         ).move_to(center=self.center)
 
     def collapse_position(self):
-        if self.moving:
+        if self.moving and not god.world.paused:
             self.center = self.last_known_center + self.last_known_direction * (
-                ((pygame.time.get_ticks() - self.last_known_time) / 1000)
+                ((god.world.get_ticks() - self.last_known_time) / 1000)
                 * self.speed_ps
             )
 
@@ -304,7 +310,7 @@ class MovingBuilding:
     def depart(self, target: Building, kind):
         self.moving = True
         self.last_known_center = self.center
-        self.last_known_time = pygame.time.get_ticks()
+        self.last_known_time = god.world.get_ticks()
         self.move_target = target
         self.target_kind = kind
         self.last_known_direction = (target.hitbox.center - self.center).normalize()
@@ -366,7 +372,7 @@ class MovingBuilding:
             round(self.center.y, constants.DIGIT_PRECISION),
             math.copysign(1, self.last_known_direction.x),
             {
-                name: (None if val is None else ([val.id, tuple(val.hitbox)]))
+                name: (None if val is None else ([val.id, tuple(val.hitbox), val.building_od.debug_attach_offset]))
                 for name, val in self.trajectory.items()
             },
             self.ext.get_display_data(),

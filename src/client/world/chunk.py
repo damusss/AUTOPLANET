@@ -28,7 +28,7 @@ class QuadsMesh:
         self.vertices += [
             (topleft, color, (0, 0)),
             ((topleft.x + size, topleft.y), color, (1, 0)),
-            ((topleft + pygame.Vector2(size, size), color, (1, 1))),
+            (topleft + pygame.Vector2(size, size), color, (1, 1)),
             ((topleft.x, topleft.y + size), color, (0, 1)),
         ]
         self.indices += [
@@ -79,6 +79,10 @@ class BuildingDataHolder:
     @property
     def has_energy(self) -> bool:
         return self.data[5]
+
+    @property
+    def extra(self):
+        return self.data[6] if len(self.data) >= 7 else None
 
 
 class Chunk:

@@ -19,7 +19,7 @@ class Drop:
         self.chunk: "Chunk" = chunk
         self.item: ItemOD = item
         self.amount = amount
-        self.last_raycast = pygame.time.get_ticks()
+        self.last_raycast = god.world.get_ticks()
         self.anim_offset = random.uniform(0, math.tau)
 
     @property
@@ -43,7 +43,7 @@ class Drop:
         ]
 
     def frame(self):
-        if pygame.time.get_ticks() - self.last_raycast >= 100:
+        if god.world.get_ticks() - self.last_raycast >= 100:
             raycast = god.world.raycast(self.pos, constants.RAYCASTFLAG_CHUNK)
             if raycast:
                 if raycast.chunk_key != self.chunk.chunk_key:

@@ -37,7 +37,7 @@ class InventoryInterface:
         self.left_pan_amount = 0
         self.left_pan_item = None
         self.pan_source = None
-        self.slot_taken_time = pygame.time.get_ticks()
+        self.slot_taken_time = 0
 
     def start_right_pan(self, slot: shared.Slot):
         self.right_panning = True
@@ -179,7 +179,7 @@ class InventoryInterface:
                     if not slot.empty:
                         if event.button == pygame.BUTTON_LEFT:
                             self.floating_slot = FloatingSlot(slot, slot.amount)
-                            self.slot_taken_time = pygame.time.get_ticks()
+                            self.slot_taken_time = god.world.get_ticks()
                         elif event.button == pygame.BUTTON_RIGHT:
                             self.floating_slot = FloatingSlot(
                                 slot,
@@ -190,7 +190,7 @@ class InventoryInterface:
                     if event.button == pygame.BUTTON_LEFT:
                         if slot is source:
                             if (
-                                pygame.time.get_ticks() - self.slot_taken_time
+                                god.world.get_ticks() - self.slot_taken_time
                                 < constants.DOUBLE_CLICK_TIME * 1000
                             ):
                                 god.client.conn.mail(

@@ -124,17 +124,18 @@ class Input:
                         input_type=event.type,
                         button=event.button,
                     )
-        if event.type in [pygame.KEYDOWN, pygame.KEYUP]:
-            if False:
-                god.client.conn.mail(constants.MAIL_INPUT_EVENT, input_type=event.type, button=None)
+        # if event.type in [pygame.KEYDOWN, pygame.KEYUP]:
+        #    god.client.conn.mail(constants.MAIL_INPUT_EVENT, input_type=event.type, button=None)
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_BACKSLASH:
                 god.rendering.debug = not god.rendering.debug
-            if event.key == pygame.K_1:
+            if event.key == pygame.K_F1:
                 god.rendering.energy_debug = not god.rendering.energy_debug
                 self.manual_energy_debug = True
-            if event.key == pygame.K_2:
+            if event.key == pygame.K_F2:
                 god.rendering.trajectory_debug = not god.rendering.trajectory_debug
+            if event.key == pygame.K_TAB:
+                god.client.conn.mail(constants.MAIL_TOGGLE_PAUSE)
         if event.type == pygame.KEYUP:
             if event.key == pygame.K_e:
                 god.ui.toggle_inventory(True)

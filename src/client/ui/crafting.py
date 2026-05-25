@@ -8,6 +8,8 @@ from src.client.ui.panel import render_panel_outline, render_panel_bg
 
 
 class CraftingInterface:
+    display_recipe = True
+
     def __init__(self):
         self.selected_category = 0
         self.category_hitboxes = {}

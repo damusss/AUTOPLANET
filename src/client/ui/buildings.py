@@ -62,8 +62,8 @@ class HopperInterface(BuildingInterface, name_id="hopper"):
 class BotInterface(BuildingInterface, name_id="bot"):
     def __init__(self):
         super().__init__()
-        self.filter: ItemOD = None
-        self.filter_rect: pygame.Rect = None
+        self.filter: ItemOD | None = None
+        self.filter_rect: pygame.Rect | None = None
         items = sorted(
             sorted(ItemOD.get_list(), key=lambda item: item.display_name),
             key=lambda item: item.category if item.category is not None else "zzz",
@@ -185,7 +185,7 @@ class MinerInterface(BuildingInterface, name_id="miner"):
     def __init__(self):
         super().__init__()
         self.working = False
-        self.work_start_time = pygame.time.get_ticks()
+        self.work_start_time = 0
         self.work_time = 0
 
     def refresh_data(self, base_data, building_data):
@@ -223,11 +223,167 @@ class MinerInterface(BuildingInterface, name_id="miner"):
         return hovering
 
 
+class CrafterInterface(BuildingInterface, name_id="crafter"):
+    display_recipe = True
+
+    def __init__(self):
+        super().__init__()
+        self.recipe: ItemOD | None = None
+        self.working = False
+        self.work_start_time = 0
+        self.recipe_rect = None
+        items = sorted(
+            sorted(
+                filter(
+                    lambda item: (
+                        item.create_data is not None
+                        and item.create_data.type in ["hands", "crafter"]
+                    ),
+                    ItemOD.get_list(),
+                ),
+                key=lambda item: item.display_name,
+            ),
+            key=lambda item: item.category if item.category is not None else "zzz",
+        )
+        self.item_slots = [shared.Slot(item, 1) for item in items]
+        self.back_btn = IconButton("left-arrow", "0.5", 0.9)
+        self.delete_btn = IconButton("delete", "0.5", 0.6)
+
+    def refresh_data(self, base_data, building_data):
+        self.refresh_inventories_data(base_data, building_data)
+        self.working = building_data["working"]
+        self.work_start_time = shared.eval_delta(building_data["work_start_time"])
+        self.recipe = (
+            ItemOD.get(building_data["recipe_uid"])
+            if building_data["recipe_uid"] is not None
+            else None
+        )
+
+    def mouse_clicked(self, event: pygame.Event):
+        if event.button != pygame.BUTTON_LEFT:
+            return
+        if god.ui.overlay_menu_func is not None:
+            if self.back_btn.clicked(event):
+                god.ui.overlay_menu_func = None
+            if self.delete_btn.clicked(event):
+                god.ui.overlay_menu_func = None
+                god.client.conn.mail(
+                    constants.MAIL_BUILDING_CONFIG,
+                    building_id=self.building_data.id,
+                    recipe_uid=None,
+                )
+            for slot in self.item_slots:
+                if slot.hitbox.collidepoint(event.pos):
+                    god.client.conn.mail(
+                        constants.MAIL_BUILDING_CONFIG,
+                        building_id=self.building_data.id,
+                        recipe_uid=slot.item.uid,
+                    )
+                    god.ui.overlay_menu_func = None
+        else:
+            if self.recipe_rect is None or not self.recipe_rect.collidepoint(event.pos):
+                return
+            god.ui.overlay_menu_func = self.render_recipe_selection
+
+    def render_recipe_selection(self, cont: pygame.Rect):
+        bottom = god.ui.inventory.render_interface_title(
+            "Select Recipe", cont.topleft, cont.w, 0.5
+        )
+        pad = cont.w * constants.UI_INVENTORY_PADDING_MULT
+        b = self.b
+        slots_w = cont.w - pad * 2
+        slot_size = god.ui.inventory.slot_size
+        slots_per_row = int(slots_w / (slot_size + b))
+        slot_b = (slots_w - slots_per_row * slot_size) / (slots_per_row - 1)
+        ri = 0
+        ii = 0
+        hovering = None
+        while ii < len(self.item_slots):
+            for ci in range(slots_per_row):
+                rect = pygame.Rect(
+                    cont.x + pad + (slot_size + slot_b) * ci,
+                    bottom + pad + (slot_size + slot_b) * ri,
+                    slot_size,
+                    slot_size,
+                )
+                hovering = god.ui.inventory.render_slot(
+                    rect, self.item_slots[ii], hovering, storage=False
+                )
+                ii += 1
+                if ii >= len(self.item_slots):
+                    break
+            ri += 1
+        left_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            bottomright=(cont.centerx - slot_b, cont.bottom - slot_b)
+        )
+        right_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            bottomleft=(cont.centerx + slot_b, cont.bottom - slot_b)
+        )
+        self.back_btn.render(left_rect)
+        self.delete_btn.render(right_rect)
+        return hovering
+
+    def render(self, b, cont):
+        self.render_title(cont, b)
+        left = (cont.centerx - cont.w / 4, cont.centery)
+        inv_slot_size = god.ui.inventory.slot_size
+        left_w = inv_slot_size * 2 + b
+        left_h = (inv_slot_size * constants.CRAFTER_INVENTORY_SIZE / 2) + (
+            b * (constants.CRAFTER_INVENTORY_SIZE / 2 - 1)
+        )
+        cur_top = left[1] - left_h / 2
+        hovering = None
+        for r in range(int(constants.CRAFTER_INVENTORY_SIZE / 2)):
+            cur_left = left[0] - left_w / 2
+            for c in range(2):
+                slot_rect = pygame.Rect(cur_left, cur_top, inv_slot_size, inv_slot_size)
+                slot = self.inventories["in"][r * 2 + c]
+                hovering = god.ui.inventory.render_slot(
+                    slot_rect,
+                    slot,
+                    hovering,
+                    ghost=(god.ui.inventory.floating_slot.source_slot is slot),
+                )
+                cur_left += inv_slot_size + b
+            cur_top += inv_slot_size + b
+        recipe_size = god.ui.inventory.slot_size * 1.2
+        recipe_rect = pygame.Rect(0, 0, recipe_size, recipe_size).move_to(
+            center=(cont.centerx, cont.centery - cont.h / 4)
+        )
+        self.recipe_rect = recipe_rect
+        hovering = god.ui.inventory.render_slot(
+            recipe_rect, shared.Slot(self.recipe, 1), hovering, "select", storage=False
+        )
+        right = (cont.centerx + cont.w / 4, cont.centery)
+        out_slot_size = inv_slot_size * 1.5
+        right_rect = pygame.Rect(0, 0, out_slot_size, out_slot_size).move_to(
+            center=right
+        )
+        right_slot = self.inventories["out"][0]
+        hovering = god.ui.inventory.render_slot(
+            right_rect,
+            right_slot,
+            hovering,
+            ghost=(god.ui.inventory.floating_slot.source_slot is right_slot),
+        )
+        gear_icon = god.assets.icons_texs["gear"]
+        icon_size = inv_slot_size * 2
+        icon_rect = pygame.Rect(0, 0, icon_size, icon_size).move_to(center=cont.center)
+        self.render_icon_progress(
+            gear_icon,
+            icon_rect,
+            self.working,
+            self.work_start_time,
+            self.recipe.create_data.time_s if self.recipe is not None else 0,
+        )
+        return hovering
+
+
 class FurnaceInterface(BuildingInterface, name_id="furnace"):
     def __init__(self):
         super().__init__()
         self.working = False
-        self.work_start_time = pygame.time.get_ticks()
+        self.work_start_time = 0
         self.work_time = 0
 
     def refresh_data(self, base_data, building_data):

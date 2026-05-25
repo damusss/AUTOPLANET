@@ -4,7 +4,6 @@ import random
 from src.server import god
 from src.object_data import TileOD, VegetationOD
 
-
 class NoiseSettings:
     def __init__(
         self,

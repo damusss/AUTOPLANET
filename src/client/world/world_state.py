@@ -1,5 +1,6 @@
 import pygame
 
+from src import shared
 from src import constants
 from src.client import god
 from src.client.world.chunk import Chunk, BuildingDataHolder
@@ -12,6 +13,9 @@ class WorldState:
     def __init__(self, rendering):
         god.world = self
         self.dt = 0
+        self.fps = 0
+        self.paused = False
+        self.cumulative_pause_ticks = 0
         self.clock = pygame.Clock()
         self.rendering: WorldRendering = rendering
         self.player = Player()
@@ -23,6 +27,10 @@ class WorldState:
         self.drops_data = []
         self.moving_buildings_data = {}
         self.bots_anim_offset = {}
+        shared.time_get_ticks = self.get_ticks
+
+    def get_ticks(self):
+        return pygame.time.get_ticks() - self.cumulative_pause_ticks
 
     def other_player_connect(self, player_id, pos, name):
         new_player = self.other_players[player_id] = OtherPlayer(pos, player_id, name)
@@ -71,15 +79,18 @@ class WorldState:
                             ...
 
     def frame(self):
-        self.dt = self.clock.tick(constants.CLIENT_FPS) / 1000
-        god.dt = self.dt
+        ms = self.clock.tick(constants.CLIENT_FPS)
+        god.dt = self.dt = (not self.paused) * (ms / 1000)
+        self.cumulative_pause_ticks += self.paused * ms
 
         self.camera.frame()
         self.player.frame()
         for other_player in self.other_players.values():
             other_player.frame()
 
-        god.windowing.window.title = f"Client {self.clock.get_fps():.0f} FPS"
+        self.fps = self.clock.get_fps()
+        god.windowing.window.title = f"Client {self.fps:.0f} FPS"
+
         self.rendering.render()
 
     def event(self, e): ...

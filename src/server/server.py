@@ -21,10 +21,10 @@ class ClientInterface:
         self.name = None
         self.id = id
         self.conn = SocketClientConnection(id, data, server)
-        self.last_heartbeat = pygame.time.get_ticks()
+        self.last_heartbeat = god.world.get_ticks()
 
     def heartbeat(self):
-        self.last_heartbeat = pygame.time.get_ticks()
+        self.last_heartbeat = god.world.get_ticks()
 
 
 class Server:
@@ -38,7 +38,7 @@ class Server:
         self.clients: dict[int, ClientInterface] = {}
         self.conn = SocketServerConnection(self)
         self.client_PID = client_PID
-        self.last_client_check = pygame.time.get_ticks()
+        self.last_client_check = god.world.get_ticks()
         self.frozen = False
         if self.client_PID is not None:
             shared.log(
@@ -48,6 +48,8 @@ class Server:
             shared.log("[S] Server started with multiplayer mode")
 
     def freeze(self):
+        if self.world.paused:
+            self.world.unpause()
         self.frozen = True
         timerc.pause()
         shared.log("[S] Server frozen (no clients connected)")
@@ -180,6 +182,13 @@ class Server:
             if mail.building_id in self.world.buildings:
                 building = self.world.buildings[mail.building_id]
                 building.ext.on_client_config(mail)
+        elif mail.compare(constants.MAIL_TOGGLE_PAUSE):
+            if self.world.paused:
+                self.world.unpause()
+            else:
+                self.world.pause()
+            for client in self.clients.values():
+                client.conn.mail(constants.MAIL_PAUSE_STATUS, paused=self.world.paused)
 
     def force_disconnect(self, client: ClientInterface, timeout=False):
         self.clients.pop(client.id)
@@ -196,10 +205,10 @@ class Server:
         while not self.abort:
             if self.client_PID is not None:
                 if (
-                    pygame.time.get_ticks() - self.last_client_check
+                    god.world.get_ticks() - self.last_client_check
                     >= constants.CLIENT_PID_COOLDOWN * 1000
                 ):
-                    self.last_client_check = pygame.time.get_ticks()
+                    self.last_client_check = god.world.get_ticks()
                     if not psutil.pid_exists(self.client_PID):
                         shared.log(
                             "[S] Offline client process not found, shutting down\n"
@@ -214,7 +223,7 @@ class Server:
             self.conn.frame()
             for client in list(self.clients.values()):
                 if (
-                    pygame.time.get_ticks() - client.last_heartbeat
+                    god.world.get_ticks() - client.last_heartbeat
                     >= constants.HEARTBEAT_TIMEOUT * 1000
                 ):
                     self.force_disconnect(client, True)

@@ -1,5 +1,7 @@
 {
     "size": [1,1],
     "inventory_kind": "in_out",
-    "need_energy": false
+    "need_energy": false,
+    "floor": true,
+    "replace_tile": true
 }

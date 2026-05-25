@@ -139,7 +139,13 @@ class ScreenUI:
             constants.UI_INFO_DESCR_COL,
             bar_h,
         )
-        pos_tex.draw(None, pos_rect.move_to(topleft=(self.b * 2, box.bottom + self.b)))
+        pos_rect = pos_rect.move_to(topleft=(self.b * 2, box.bottom + self.b))
+        pos_tex.draw(None, pos_rect)
+        fps_tex, fps_rect = god.assets.font.get_texture_and_rect(
+            f"FPS: {round(god.world.fps)}", constants.UI_INFO_DESCR_COL, bar_h
+        )
+        fps_rect = fps_rect.move_to(topleft=(self.b * 2, pos_rect.bottom + self.b))
+        fps_tex.draw(None, fps_rect)
         return box.right + self.b
 
     def render_debug_indicators(self, left):
@@ -166,11 +172,11 @@ class ScreenUI:
             tex.color = "white"
             god.assets.font.font.outline = 1
             key_tex_o, key_rect_o = god.assets.font.get_texture_and_rect(
-                str(key_num), "black", size / 1.3
+                f"F{key_num}", "black", size / 1.3
             )
             god.assets.font.font.outline = 0
             key_tex, key_rect = god.assets.font.get_texture_and_rect(
-                str(key_num), "white", size / 1.3
+                f"F{key_num}", "white", size / 1.3
             )
             key_tex_o.draw(None, key_rect_o.move_to(center=rect.center))
             key_tex.draw(None, key_rect.move_to(center=rect.center))
@@ -241,14 +247,10 @@ class ScreenUI:
 
     def render_craft_queue(self):
         slot_size = god.windowing.width * constants.UI_CRAFT_QUEUE_SLOT_SIZE_MULT
-        width = slot_size * len(god.player.craft_queue) + self.b * (
-            len(god.player.craft_queue) - 1
-        )
-        left = god.windowing.width / 2 - width / 2
         for i, craft_item in enumerate(god.player.craft_queue):
             rect = pygame.Rect(
-                left + (slot_size + self.b) * i,
-                god.windowing.height - slot_size - self.b,
+                self.b,
+                god.windowing.height - (slot_size + self.b) * (i + 1) - self.b,
                 slot_size,
                 slot_size,
             )
@@ -261,7 +263,7 @@ class ScreenUI:
                 image_percentage=(
                     1
                     if craft_item.start_time is None
-                    else (pygame.time.get_ticks() - craft_item.start_time)
+                    else (god.world.get_ticks() - craft_item.start_time)
                     / (craft_item.item.create_data.time_s * 1000)
                 ),
             )
@@ -292,7 +294,7 @@ class ScreenUI:
                 if slot is not None:
                     hovering_slot = slot
                     self.cursor = constants.CURSOR_HOVER
-                    if self.open_interface == self.crafting_interface:
+                    if self.open_interface.display_recipe:
                         crafting_slot = True
             if self.overlay_menu_func is not None:
                 slot = self.overlay_menu_func(cont)

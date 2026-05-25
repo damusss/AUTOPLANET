@@ -34,7 +34,7 @@ class Chunk:
         self.stars = []  # (cx, cy, size)
         self.dusts = []  # (cx, cy, size, rgb)
         self.big_star = None  # (cx, cy, size, type index (-1 = black hole))
-        self.tiles_mat: list[list] = (
+        self.tiles_mat: list[list | None] = (
             [None] * constants.CHUNK_SIZE * constants.CHUNK_SIZE
         )  # (type ID, solid 1|0, ore amount)
         self.generate()
@@ -188,10 +188,18 @@ class Chunk:
                 other = bot.trajectory[shared.other_kind(kind)]
                 if other is None:
                     continue
+                this_center = tuple(
+                    pygame.Vector2(building.hitbox.center)
+                    + building.building_od.debug_attach_offset
+                )
+                other_center = tuple(
+                    pygame.Vector2(other.hitbox.center)
+                    + other.building_od.debug_attach_offset
+                )
                 if kind == "in":
-                    data = [building.hitbox.center, other.hitbox.center]
+                    data = [this_center, other_center]
                 else:
-                    data = [other.hitbox.center, building.hitbox.center]
+                    data = [other_center, this_center]
                 traj.append(data)
         return {
             "key": self.chunk_key,

@@ -1,10 +1,30 @@
 {
-    "size": [2, 2],
-    "inventory_kind": "in_out",
-    "floor_whitelist": [
-        "bricks_platform",
-        "iron_platform",
-        "copper_platform",
-        "titanium_platform"
-    ]
+  "size": [
+    2,
+    2
+  ],
+  "inventory_kind": "in_out",
+  "floor_whitelist": [
+    "bricks_platform",
+    "iron_platform",
+    "copper_platform",
+    "titanium_platform"
+  ],
+  "debug_attach_offset": [
+    0,
+    -0.9
+  ],
+  "states": {
+    "on": {
+      "light": {
+        "radius": 7,
+        "intensity": 160,
+        "color": "#e3de76"
+      }
+    },
+    "off": {
+      "default_image": true,
+      "default": true
+    }
+  }
 }

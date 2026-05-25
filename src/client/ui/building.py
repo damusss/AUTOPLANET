@@ -12,6 +12,7 @@ from src.client.world.chunk import BuildingDataHolder
 class BuildingInterface:
     REGISTERED_INTERFACES: dict[str, type[typing.Self]] = {}
     building_od: BuildingOD
+    display_recipe = False
 
     def __init__(self):
         self.b = 0
@@ -69,12 +70,14 @@ class BuildingInterface:
         )
         return title_bottom + title_rect.h + self.b * 2
 
-    def render_icon_progress(self, icon, rect, progress_active, start_time, time_s):
+    def render_icon_progress(
+        self, icon, rect, progress_active, start_time, time_s
+    ):
         icon.alpha = constants.UI_INTERFACE_ICON_ALPHA
         icon.draw(None, rect)
         icon.alpha = constants.OPAQUE
-        if progress_active:
-            mult = (pygame.time.get_ticks() - start_time) / (time_s * 1000)
+        if progress_active and time_s != 0:
+            mult = (god.world.get_ticks() - start_time) / (time_s * 1000)
             perc_source_h = icon.height * mult
             perc_icon_h = rect.w * mult
             icon.draw(

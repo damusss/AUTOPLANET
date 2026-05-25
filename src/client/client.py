@@ -41,7 +41,7 @@ class Client:
         self.state.enter()
 
     def handle_mail(self, mail: shared.Mail):
-        self.last_mail = pygame.time.get_ticks()
+        self.last_mail = god.world.get_ticks()
         if mail.compare(constants.MAIL_CONNECTION_ACCEPTED):
             self.conn.connection_accepted(mail)
             self.enter_state(self.world)
@@ -107,7 +107,7 @@ class Client:
         elif mail.compare(constants.MAIL_BREAK_START):
             time = mail.time
             if time == "now":
-                time = pygame.time.get_ticks()
+                time = god.world.get_ticks()
             self.world.player.break_start_time = time
             self.world.player.break_mult = mail.mult if mail.mult is not None else 1
         elif mail.compare(constants.MAIL_BUILDING_AVAILABLE_RESPONSE):
@@ -120,6 +120,8 @@ class Client:
                 self.world.rendering.ui.refresh_building_interact(
                     mail.base_data, mail.building_data
                 )
+        elif mail.compare(constants.MAIL_PAUSE_STATUS):
+            self.world.paused = mail.paused
 
     def disconnect(self):
         self.mailbox.queue.clear()
@@ -139,7 +141,7 @@ class Client:
     def frame(self):
         if (
             self.last_mail is not None
-            and pygame.time.get_ticks() - self.last_mail
+            and god.world.get_ticks() - self.last_mail
             >= constants.CLIENT_TIMEOUT * 1000
         ):
             shared.log(f"[C:{self.id}] Server timeout, disconnecting")

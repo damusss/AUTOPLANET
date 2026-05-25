@@ -25,6 +25,8 @@ class World:
         self.seeds = {"surface": terrain.get_random_seed()}
         for ore in terrain.DISTRIBUTION_SETTINGS:
             self.seeds[ore.name] = terrain.get_random_2d_seed()
+        self.paused = False
+        self.cumulative_pause_ticks = 0
         self.players: dict[int, Player] = {}
         self.clock = pygame.Clock()
         self.chunks: dict[str, Chunk] = {}
@@ -36,12 +38,24 @@ class World:
         self.unlocked_nodes: set[str] = set()
         self.unlocked_items: set[str] = object_data.ITEMS_STARTER_PACK.copy()
         timerc.add(constants.DISPLAY_FPS_COOLDOWN, self.display_fps)
+        shared.time_get_ticks = self.get_ticks
         building.EnergyConn_t = EnergyConn
         assert buildings
 
     def display_fps(self):
         shared.log(f"FPS: {self.clock.get_fps():.0f}")
         return self.display_fps
+
+    def get_ticks(self):
+        return pygame.time.get_ticks() - self.cumulative_pause_ticks
+
+    def pause(self):
+        self.paused = True
+        timerc.pause()
+
+    def unpause(self):
+        self.paused = False
+        timerc.resume()
 
     def player_connect(self, client):
         player = Player(client)
@@ -149,7 +163,7 @@ class World:
         return drops_data, moving_data
 
     def get_chunks_collding_rect(
-        self, rect: pygame.FRec, bottom_offset=0, side_offset=0
+        self, rect: pygame.FRect, bottom_offset=0, side_offset=0
     ) -> list[Chunk]:
         colliding = []
         for point in (
@@ -286,13 +300,20 @@ class World:
             )
         building.on_destroy()
 
-    def break_building(self, building: Building, tool: ItemOD | None = None):
+    def break_building(
+        self, building: Building | MovingBuilding, tool: ItemOD | None = None
+    ):
         if not building.building_od.static:
+            assert isinstance(building, MovingBuilding)
             self.break_moving_building(building, tool)
             return
+        assert isinstance(building, Building)
         building.chunk.building_ids.remove(building.id)
         if building.building_od.floor:
-            building.chunk.building_floor_hitboxes.remove(building.hitbox)
+            try:
+                building.chunk.building_floor_hitboxes.remove(building.hitbox)
+            except ValueError:
+                ...
         for chunk in building.bordering_chunks + [building.chunk]:
             for tile_pos, bid in list(chunk.tile_hitboxes_table.items()):
                 if bid == building.id:
@@ -382,6 +403,12 @@ class World:
                 veg_data[0] == raycast.tile_pos[0]
                 and veg_data[1] == raycast.tile_pos[1]
             ):
+                for drop in raycast.object_data.item_drop:
+                    self.drop(
+                        shared.get_drop_random_pos(veg_data[3]),
+                        drop[0],
+                        drop[1],
+                    )
                 chunk.vegetation.remove(veg_data)
                 chunk.refresh()
                 return
@@ -422,7 +449,9 @@ class World:
         # no ray/hitbox = air
         return constants.BUILDING_STATUS_AVAILABLE
 
-    def floor_valid_for_building(self, building: BuildingOD, ray: shared.RaycastHit):
+    def floor_valid_for_building(
+        self, building: BuildingOD, ray: shared.RaycastHit | None
+    ):
         # a building that can be placed on air doesn't concern itself with the floor
         if building.air:
             return constants.BUILDING_STATUS_AVAILABLE
@@ -451,17 +480,28 @@ class World:
         ret_valid_f = constants.BUILDING_STATUS_AVAILABLE
         do_return_f = False
         if building_od.vegetation_requirement is not None:
-            veg_ray = self.raycast(
-                (
-                    topleft.x + building_od.size[0] / 2,
-                    topleft.y + building_od.size[1] / 2 + building_od.size[1] / 4,
-                ),
-                constants.RAYCASTFLAG_VEGETATION,
-            )
-            if (
-                veg_ray is None
-                or veg_ray.object_data != building_od.vegetation_requirement
-            ):
+            q_x = building_od.size[0] / 4
+            q_y = building_od.size[1] / 4
+            veg_rays = [
+                self.raycast(
+                    topleft + offset,
+                    constants.RAYCASTFLAG_VEGETATION,
+                )
+                for offset in [
+                    (q_x, q_y),
+                    (q_x * 3, q_y),
+                    (q_x, q_y * 3),
+                    (q_x * 3, q_y * 3),
+                ]
+            ]
+            count = 4
+            for veg_ray in veg_rays:
+                if (
+                    veg_ray is None
+                    or veg_ray.object_data != building_od.vegetation_requirement
+                ):
+                    count -= 1
+            if count <= 0:
                 return constants.BUILDING_STATUS_MISSING_VEGETATION
         if building_od.floor:
             chunk_key = shared.get_chunk_key(shared.get_chunk_pos(topleft))
@@ -476,7 +516,7 @@ class World:
                 constants.RAYCASTFLAG_COLLIDER,
             )
             valid_f = self.floor_valid_for_building(building_od, floor_ray)
-            # if there is no floor but it's a platform let's check if there's a background tile
+            # if there is no floor, but it's a platform let's check if there's a background tile
             if valid_f not in [
                 constants.BUILDING_STATUS_AVAILABLE,
                 constants.BUILDING_STATUS_COULD_BE_MISSING_FLOOR_OR_TILE,
@@ -610,7 +650,14 @@ class World:
                 building.require_floor = False
         chunk.building_ids.add(building.id)
         if building_od.floor:
-            chunk.building_floor_hitboxes.append(building.hitbox)
+            below_ray = self.raycast(
+                (building.hitbox.centerx, building.hitbox.bottom + 0.5),
+                constants.RAYCASTFLAG_COLLIDER,
+            )
+            if below_ray is not None:
+                chunk.building_floor_hitboxes.append(building.hitbox)
+            else:
+                building.require_floor = False
         for x in range(building_od.size[0]):
             for y in range(building_od.size[1]):
                 tile_pos = (
@@ -707,17 +754,6 @@ class World:
                         None,
                         drop.amount,
                     )
-            for rel_x, rel_y, plant_uid, hitbox in chunk.vegetation:
-                if hitbox.collidepoint(pos):
-                    return shared.RaycastHit(
-                        chunk_key,
-                        hitbox,
-                        constants.RAYCAST_VEGETATION,
-                        VegetationOD.get(plant_uid),
-                        (rel_x, rel_y),
-                        None,
-                        None,
-                    )
         building_id = chunk.building_ids_table.get(tile_pos, None)
         if building_id is not None and building_id in self.buildings:
             building = self.buildings[building_id]
@@ -731,6 +767,18 @@ class World:
                     None,
                     building.get_raycast_data(),
                 )
+        if flag == constants.RAYCASTFLAG_INFO:
+            for rel_x, rel_y, plant_uid, hitbox in chunk.vegetation:
+                if hitbox.collidepoint(pos):
+                    return shared.RaycastHit(
+                        chunk_key,
+                        hitbox,
+                        constants.RAYCAST_VEGETATION,
+                        VegetationOD.get(plant_uid),
+                        (rel_x, rel_y),
+                        None,
+                        None,
+                    )
         if tile_pos in chunk.tile_hitboxes_table or flag == constants.RAYCASTFLAG_ALL:
             tile_data = chunk.get_tile(tile_pos)
             return shared.RaycastHit(
@@ -752,9 +800,9 @@ class World:
         return new_id
 
     def frame(self):
-        self.dt = self.clock.tick_busy_loop(constants.SERVER_FPS) / 1000
-        god.dt = self.dt
-        god.dt = pygame.math.clamp(god.dt, 0, 1 / 60)
+        ms = self.clock.tick(constants.SERVER_FPS)
+        god.dt = self.dt = (not self.paused) * pygame.math.clamp((ms / 1000), 0, 1 / 60)
+        self.cumulative_pause_ticks += self.paused * ms
         if len(self.refresh_queued_chunks) > 0:
             for chunk_key in self.refresh_queued_chunks:
                 self.refresh_chunk(chunk_key)

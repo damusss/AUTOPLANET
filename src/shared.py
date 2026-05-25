@@ -6,6 +6,8 @@ import pygame
 from src import constants
 from src.object_data import ObjectData, TileOD, VegetationOD, BuildingOD, ItemOD
 
+time_get_ticks = pygame.time.get_ticks
+
 
 class CraftQueueItem:
     def __init__(self, item: ItemOD, amount=1, phantom=False, start_time=None):
@@ -88,10 +90,10 @@ class RaycastHit:
     ):
         self.chunk_key = chunk_key
         self.hitbox: pygame.FRect = hitbox
-        self.type = type_
+        self.type: int = type_
         self.object_data: TileOD | VegetationOD | BuildingOD | ObjectData = object_data
-        self.tile_pos = tile_pos
-        self.tile_data = tile_data
+        self.tile_pos: tuple[int, int] | None = tile_pos
+        self.tile_data: tuple | None = tile_data
         self.data = data
 
     def get_client_data(self):
@@ -310,7 +312,7 @@ def mult_rect(rect: pygame.FRect, mult):
 
 
 def eval_delta(time):
-    return pygame.time.get_ticks() - time
+    return time_get_ticks() - time
 
 
 def get_building_id():
@@ -323,7 +325,7 @@ def get_building_id():
 
 
 def get_float_anim(height, time_mult, offset):
-    return ((math.sin(pygame.time.get_ticks() * time_mult + offset)) + 1) / 2 * height
+    return ((math.sin(time_get_ticks() * time_mult + offset)) + 1) / 2 * height
 
 
 def other_kind(name, strip=False):

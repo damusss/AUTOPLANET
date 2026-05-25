@@ -156,14 +156,9 @@ class WorldRendering:
         player_hitbox = god.player.hitbox
         self.renderer.draw_rect(god.camera.rect_to_screen(player_hitbox))
         player_hitbox = player_hitbox.inflate(0.2, 0.1)
+        self.renderer.draw_color = constants.DEBUG_TILE_HITBOX_COL
         for chunk in god.world.loaded_chunks.values():
             if player_hitbox.colliderect(chunk.world_rect):
-                self.renderer.draw_color = constants.DEBUG_VEGETATION_HITBOX_COLOR
-                for veg in chunk.vegetation:
-                    self.renderer.draw_rect(
-                        god.camera.rect_to_screen(veg[1]).inflate(-2, -2)
-                    )
-                self.renderer.draw_color = constants.DEBUG_TILE_HITBOX_COL
                 for hitbox in chunk.tile_hitboxes.values():
                     self.renderer.draw_rect(god.camera.rect_to_screen(hitbox))
                 for bd in chunk.static_buildings:

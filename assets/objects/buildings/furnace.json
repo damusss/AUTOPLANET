@@ -1,6 +1,7 @@
 {
     "size": [2,2],
     "inventory_kind": "in_out",
+    "debug_attach_offset": [0, -0.7],
     "states": {
         "on": {
             "default_image": true,

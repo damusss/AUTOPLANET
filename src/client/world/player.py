@@ -59,7 +59,7 @@ class Player(PlayerLike):
         self.frame_speed = constants.IDLE_FRAME_SPEED
         self.frames = god.assets.player_idle_texs
         self.texture: Texture = self.frames[0]
-        self.last_frame = pygame.time.get_ticks()
+        self.last_frame = god.world.get_ticks()
         self.running = False
         self.jumping = False
         self.energy = constants.PLAYER_MAX_ENERGY
@@ -185,8 +185,8 @@ class Player(PlayerLike):
                 self.frame_speed = constants.IDLE_FRAME_SPEED
                 self.frame_index = self.frame_index % len(self.frames)
 
-            if pygame.time.get_ticks() - self.last_frame >= self.frame_speed * 1000:
-                self.last_frame = pygame.time.get_ticks()
+            if god.world.get_ticks() - self.last_frame >= self.frame_speed * 1000:
+                self.last_frame = god.world.get_ticks()
                 self.frame_index += 1
                 if self.frame_index >= len(self.frames):
                     self.frame_index = 0

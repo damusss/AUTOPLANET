@@ -41,7 +41,7 @@ class CameraUI:
             self.render_energy_debug()
 
     def render_break_anim(self, start_time, center, break_time_s, building_data):
-        percent = (pygame.time.get_ticks() - start_time) / (break_time_s * 1000)
+        percent = (god.world.get_ticks() - start_time) / (break_time_s * 1000)
         frame = int(percent * len(god.assets.break_anim_texs))
         if frame >= len(god.assets.break_anim_texs):
             frame = len(god.assets.break_anim_texs) - 1
@@ -261,7 +261,7 @@ class CameraUI:
         for name in ["in", "out"]:
             if traj[name]:
                 box = pygame.FRect(traj[name][1]).inflate(0.2, 0.2)
-                points.append(box.center)
+                points.append(pygame.Vector2(box.center) + traj[name][2])
                 tex = god.assets.icons_texs["in" if name == "out" else "out"]
                 tex.color = constants.TRAJECTORY_COLOR
                 tex.draw(None, god.camera.rect_to_screen(box))

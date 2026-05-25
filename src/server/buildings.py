@@ -4,6 +4,7 @@ from src import shared
 from src import constants
 from src.server import god
 from src.timerc import timerc
+from src.shared import Slot
 from src.object_data import ItemOD, TileOD
 from src.server.building import BuildingExt, MovingBuildingExt
 from src.server.inventory import BuildingInventory
@@ -11,9 +12,9 @@ from src.server.inventory import BuildingInventory
 
 class Bot(MovingBuildingExt, name_id="bot"):
     def init(self):
-        self.slot = shared.Slot(None, 0, None, 0)
+        self.slot = Slot(None, 0, None, 0)
         self.inventory = BuildingInventory(self, self.slot)
-        self.upgrade_slot = shared.Slot(
+        self.upgrade_slot = Slot(
             None, 0, [constants.INVENTORY_FILTER_CATEGORY, ["bot_upgrades"]], 0
         )
         self.inventories["in"] = self.inventory
@@ -94,14 +95,14 @@ class Storage(BuildingExt, name_id="storage"):
     def init(self):
         self.inventory = BuildingInventory(self)
         for i in range(constants.INVENTORY_ROWS * constants.INVENTORY_COLS):
-            self.inventory.add_slot(shared.Slot(None, 0, None, i))
+            self.inventory.add_slot(Slot(None, 0, None, i))
         self.inventories["in"] = self.inventory
         self.inventories["out"] = self.inventory
 
 
 class Hopper(BuildingExt, name_id="hopper"):
     def init(self):
-        self.slot = shared.Slot(None, 0, None, 0)
+        self.slot = Slot(None, 0, None, 0)
         self.inventories["in"] = BuildingInventory(self, self.slot)
         self.inventories["out"] = BuildingInventory(self, self.slot)
 
@@ -111,10 +112,10 @@ class Miner(BuildingExt, name_id="miner"):
         self.inventories["out"] = BuildingInventory(self)
         for i in range(2):
             self.inventories["out"].add_slot(
-                shared.Slot(None, 0, [constants.INVENTORY_FILTER_READONLY], 0)
+                Slot(None, 0, [constants.INVENTORY_FILTER_READONLY], 0)
             )
         self.working = False
-        self.work_start_time = pygame.time.get_ticks()
+        self.work_start_time = god.world.get_ticks()
         self.tile_datas = []
         self.raycasts = []
         for pos in [
@@ -185,7 +186,7 @@ class Miner(BuildingExt, name_id="miner"):
             if not self.out_inv.has_space(drop[0], drop[1]):
                 return False
         self.working = True
-        self.work_start_time = pygame.time.get_ticks()
+        self.work_start_time = god.world.get_ticks()
         self.work_time = tile.miner_time_s
         self.building.change_state("on")
         timerc.add(tile.miner_time_s, self.on_finish_work)
@@ -199,17 +200,96 @@ class Miner(BuildingExt, name_id="miner"):
         return data
 
 
+class Crafter(BuildingExt, name_id="crafter"):
+    def init(self):
+        in_inv = BuildingInventory(self)
+        for i in range(constants.CRAFTER_INVENTORY_SIZE):
+            in_inv.add_slot(Slot(None, 0, None, i))
+        self.inventories["in"] = in_inv
+        self.out_slot = Slot(None, 0, [constants.INVENTORY_FILTER_READONLY], 0)
+        self.inventories["out"] = BuildingInventory(self, self.out_slot)
+        self.working = False
+        self.work_start_time = god.world.get_ticks()
+        self.recipe: ItemOD | None = None
+
+    def on_client_config(self, mail):
+        if mail.missing_fields("recipe_uid"):
+            return
+        if mail.recipe_uid is None:
+            self.recipe = None
+        else:
+            self.recipe = ItemOD.get(mail.recipe_uid)
+        self.building.refresh_interact()
+
+    def on_inventory_dirty(self):
+        if not self.working:
+            self.try_to_work()
+        self.building.refresh_interact()
+
+    def try_to_work(self):
+        if not self.building.has_energy:
+            return False
+        if self.recipe is None:
+            return False
+        if not self.out_inv.has_space(self.recipe, 1):
+            return False
+        craft_status = shared.craft_availability_status(
+            self.recipe, self.in_inv.count, 1
+        )
+        if craft_status.availability != constants.CRAFT_READY:
+            return False
+        self.working = True
+        self.work_start_time = god.world.get_ticks()
+        self.building.change_state("on")
+        for item_uid, amount in craft_status.counted_items.items():
+            self.in_inv.remove(ItemOD.get(item_uid), amount)
+        timerc.add(self.recipe.create_data.time_s, self.on_finish_work)
+        return True
+
+    def on_finish_work(self):
+        if self.destroyed:
+            return
+        self.out_inv.add(self.recipe, 1, ignore_filters=True)
+        if not self.try_to_work():
+            self.stop_working()
+
+    def on_energy_awake(self):
+        if not self.working:
+            self.try_to_work()
+
+    def stop_working(self):
+        self.working = False
+        self.building.change_state("off")
+
+    def get_client_data(self):
+        data = self.get_inventories_data()
+        data["recipe_uid"] = self.recipe.uid if self.recipe is not None else None
+        data["working"] = self.working
+        data["work_start_time"] = shared.eval_delta(self.work_start_time)
+        return data
+
+    def get_extra_data(self):
+        return (
+            {
+                "recipe_uid": self.recipe.uid if self.recipe is not None else None,
+                "work_start_time": shared.eval_delta(self.work_start_time),
+            }
+            if self.working
+            else None
+        )
+
+
 class Furnace(BuildingExt, name_id="furnace"):
     def init(self):
-        self.in_slot = shared.Slot(
+        self.in_slot = Slot(
             None, 0, [constants.INVENTORY_FILTER_CATEGORY, ["smeltables"]], 0
         )
-        self.out_slot = shared.Slot(None, 0, [constants.INVENTORY_FILTER_READONLY], 0)
+        self.out_slot = Slot(None, 0, [constants.INVENTORY_FILTER_READONLY], 0)
         self.inventories["in"] = BuildingInventory(self, self.in_slot)
         self.inventories["out"] = BuildingInventory(self, self.out_slot)
         self.working = False
-        self.work_start_time = pygame.time.get_ticks()
-        self.smelt_result: ItemOD = None
+        self.work_start_time = god.world.get_ticks()
+        self.smelt_result: ItemOD | None = None
 
     def on_inventory_dirty(self):
         if not self.working:
@@ -243,7 +323,7 @@ class Furnace(BuildingExt, name_id="furnace"):
         if not self.out_inv.has_space(smelt_result, 1):
             return False
         self.working = True
-        self.work_start_time = pygame.time.get_ticks()
+        self.work_start_time = god.world.get_ticks()
         self.smelt_result = smelt_result
         self.building.change_state("on")
         self.in_inv.remove(smeltable, 1)

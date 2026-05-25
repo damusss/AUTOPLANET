@@ -122,6 +122,8 @@ DROP_ANIM_TIME_MULT = 1 / 150
 
 CREATE_HANDS = "hands"
 
+CRAFTER_INVENTORY_SIZE = 8
+
 # chunk
 CHUNK_SIZE = 12
 RENDER_DISTANCE = (10, 8)
@@ -277,7 +279,7 @@ UI_SLOT_IMAGE_OFFSET_Y_MULT = 0.05
 UI_CRAFTING_CATEOGORIES_H_MULT = 1.1
 UI_CRAFTING_CATEGORIES_CORNER_SIZE_MULT = 0.2
 
-UI_CRAFT_QUEUE_SLOT_SIZE_MULT = 0.032
+UI_CRAFT_QUEUE_SLOT_SIZE_MULT = 0.028
 
 UI_EDIT_TRAJECTORY_TEXT_H = 0.015
 
@@ -421,6 +423,8 @@ MAIL_BUILDING_INTERACT = _mail_id(), ("building_id", "unsubscribe")
 MAIL_REFRESH_BUILDING_INTERACT = _mail_id(), ("broken", "base_data", "building_data")
 MAIL_BOT_TRAJECTORY = _mail_id(), ("bot_id", "target_id", "kind")
 MAIL_BUILDING_CONFIG = _mail_id(), ("building_id",)
+MAIL_TOGGLE_PAUSE = _mail_id(), ()
+MAIL_PAUSE_STATUS = _mail_id(), ("paused", )
 
 # python
 JSON_SEPS = (",", ":")

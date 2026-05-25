@@ -23,11 +23,11 @@ class Player:
         self.input_dir = pygame.Vector2()
         self.health = constants.PLAYER_MAX_HEALTH
         self.energy = constants.PLAYER_MAX_ENERGY
-        self.raycast: shared.RaycastHit = None
+        self.raycast: shared.RaycastHit|None = None
         self.inventory = Inventory(self)
         self.craft_queue: deque[shared.CraftQueueItem] = deque()
         self.break_start_time = None
-        self.break_data: shared.RaycastHit = None
+        self.break_data: shared.RaycastHit|None = None
         self.break_count: int = 0
         self.last_mold_damage = 0
         self.last_regen = 0
@@ -41,7 +41,7 @@ class Player:
         self.client_mouse_pressing = False
         self.client_building_preview = None
         self.client_building_preview_clear_after = 1
-        self.client_subscribed_building: "Building" = None
+        self.client_subscribed_building: "Building|None" = None
 
     @property
     def hitbox(self):
@@ -131,10 +131,10 @@ class Player:
         health_dirty = False
         if self.health < constants.PLAYER_MAX_HEALTH:
             if (
-                pygame.time.get_ticks() - self.last_regen
+                god.world.get_ticks() - self.last_regen
                 >= constants.PLAYER_HEALTH_REGEN_COOLDOWN
             ):
-                self.last_regen = pygame.time.get_ticks()
+                self.last_regen = god.world.get_ticks()
                 self.health = pygame.math.clamp(
                     self.health + constants.PLAYER_HEALTH_REGEN_AMOUNT,
                     0,
@@ -154,9 +154,9 @@ class Player:
             return
         craft_item = self.craft_queue[0]
         if craft_item.start_time is None:
-            craft_item.start_time = pygame.time.get_ticks()
+            craft_item.start_time = god.world.get_ticks()
         if (
-            pygame.time.get_ticks() - craft_item.start_time
+            god.world.get_ticks() - craft_item.start_time
             >= craft_item.item.create_data.time_s * 1000
         ):
             if not craft_item.phantom:
@@ -164,7 +164,7 @@ class Player:
                 if left > 0:
                     god.world.drop(self.pos, craft_item.item, 1)
             craft_item.amount -= 1
-            craft_item.start_time = pygame.time.get_ticks()
+            craft_item.start_time = god.world.get_ticks()
             if craft_item.amount <= 0:
                 self.craft_queue.popleft()
 
@@ -231,7 +231,7 @@ class Player:
                 self.client.conn.mail(constants.MAIL_BREAK_START, time=None, mult=None)
             else:
                 if (
-                    pygame.time.get_ticks() - self.break_start_time
+                    god.world.get_ticks() - self.break_start_time
                     >= self.break_data.object_data.break_time_s * 1000 * self.break_mult
                 ):
                     god.world.break_raycast(
@@ -264,7 +264,7 @@ class Player:
                     and self.raycast.object_data.break_time_s > 0
                 ):
                     self.break_data = self.raycast
-                    self.break_start_time = pygame.time.get_ticks()
+                    self.break_start_time = god.world.get_ticks()
                     self.client.conn.mail(
                         constants.MAIL_BREAK_START, time="now", mult=self.break_mult
                     )
@@ -274,7 +274,7 @@ class Player:
                         and self.raycast.object_data == TileOD.objects.mold_patch
                     ):
                         if (
-                            pygame.time.get_ticks() - self.last_mold_damage
+                            god.world.get_ticks() - self.last_mold_damage
                             >= constants.MOLD_BREAK_DAMAGE_COOLDOWN
                         ):
                             self.health = pygame.math.clamp(
@@ -283,7 +283,7 @@ class Player:
                                 constants.PLAYER_MAX_HEALTH,
                             )
                             self.mail_stats()
-                            self.last_mold_damage = pygame.time.get_ticks()
+                            self.last_mold_damage = god.world.get_ticks()
 
     def collisions_x(self, rects: list[pygame.FRect]):
         prev_hitbox = self.hitbox
@@ -291,12 +291,12 @@ class Player:
         for rect in rects:
             if rect.colliderect(hitbox):
                 do_break = False
-                if hitbox.right < rect.centerx and hitbox.right > rect.left:
+                if rect.centerx > hitbox.right > rect.left:
                     hitbox.right = rect.left - constants.ZERO
                     self.vel.x = constants.ZERO
                     self.input_dir.x = 0
                     do_break = True
-                elif hitbox.left > rect.centerx and hitbox.left < rect.right:
+                elif rect.centerx < hitbox.left < rect.right:
                     hitbox.left = rect.right + constants.ZERO
                     self.vel.x = -constants.ZERO
                     self.input_dir.x = -constants.ZERO
@@ -311,12 +311,12 @@ class Player:
         for rect in rects:
             if rect.colliderect(hitbox):
                 do_break = False
-                if hitbox.bottom < rect.centery and hitbox.bottom > rect.top:
+                if rect.centery > hitbox.bottom > rect.top:
                     hitbox.bottom = rect.top
                     self.vel.y = 0
                     self.input_dir.y = 0
                     do_break = True
-                elif hitbox.top > rect.centery and hitbox.top < rect.bottom:
+                elif rect.centery < hitbox.top < rect.bottom:
                     hitbox.top = rect.bottom
                     self.vel.y = 0
                     do_break = True

@@ -57,8 +57,14 @@ class EnergyConn:
                 has_energy = True
                 break
         return [
-            self.a.building.hitbox.center,
-            self.b.building.hitbox.center,
+            tuple(
+                self.a.building.hitbox.center
+                + pygame.Vector2(self.a.building.building_od.debug_attach_offset)
+            ),
+            tuple(
+                self.b.building.hitbox.center
+                + pygame.Vector2(self.b.building.building_od.debug_attach_offset)
+            ),
             has_energy,
         ]
 
@@ -80,14 +86,21 @@ class EnergyPlant(BuildingExt, name_id="energy_plant"):
             god.world.disrupt_alerted_plants.add(self.building.id)
 
     def on_place(self):
-        oxygen_raycast = god.world.raycast(
-            (self.building.hitbox.centerx, self.building.hitbox.centery + 0.5),
-            constants.RAYCASTFLAG_VEGETATION,
-        )
-        self.building.has_energy = (
-            oxygen_raycast is not None
-            and oxygen_raycast.object_data == VegetationOD.objects.oxygen_plant
-        )
+        oxygen_raycasts = [
+            god.world.raycast(
+                pygame.Vector2(self.building.hitbox.center) + offset,
+                constants.RAYCASTFLAG_VEGETATION,
+            )
+            for offset in ((-0.5, -0.5), (-0.5, 0.5), (0.5, -0.5), (0.5, 0.5))
+        ]
+        self.building.has_energy = False
+        for oxygen_raycast in oxygen_raycasts:
+            if (
+                oxygen_raycast is not None
+                and oxygen_raycast.object_data == VegetationOD.objects.oxygen_plant
+            ):
+                self.building.has_energy = True
+                break
         chunks = god.world.load_or_get_chunks(
             shared.get_chunk_keys_colliding_circle(
                 self.provider.center, self.provider.radius
