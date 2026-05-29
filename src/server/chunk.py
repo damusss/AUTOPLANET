@@ -1,4 +1,5 @@
 import random
+import typing
 
 import pygame
 
@@ -9,6 +10,7 @@ from src.server import terrain
 from src.object_data import Star, Dust, BigStar, BlackHole, VegetationOD
 from src.server.drop import Drop
 from src.server.energy import EnergyProvider
+from src.server.building import Building, MovingBuilding
 
 
 class Chunk:
@@ -40,8 +42,8 @@ class Chunk:
         self.generate()
 
     @property
-    def buildings(self):
-        return (
+    def buildings(self) -> typing.Generator[Building, typing.Any, None]:
+        return (  # type: ignore
             god.world.buildings[bid]
             for bid in self.building_ids
             if bid in god.world.buildings
@@ -184,7 +186,7 @@ class Chunk:
             for bot_id, kind in building.bots_endpoint.items():
                 if bot_id not in god.world.buildings:
                     continue
-                bot = god.world.buildings[bot_id]
+                bot: MovingBuilding = god.world.buildings[bot_id]
                 other = bot.trajectory[shared.other_kind(kind)]
                 if other is None:
                     continue

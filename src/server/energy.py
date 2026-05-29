@@ -35,6 +35,7 @@ class EnergyConn:
         for e in self.endpoints:
             if e != endpoint:
                 return e
+        raise
 
     def finalize(self):
         for e in self.endpoints:

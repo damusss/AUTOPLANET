@@ -17,10 +17,10 @@ from src.server.connection import (
 
 
 class ClientInterface:
-    def __init__(self, id, data, server):
+    def __init__(self, id_, data, server):
         self.name = None
-        self.id = id
-        self.conn = SocketClientConnection(id, data, server)
+        self.id = id_
+        self.conn = SocketClientConnection(id_, data, server)
         self.last_heartbeat = god.world.get_ticks()
 
     def heartbeat(self):
@@ -28,7 +28,7 @@ class ClientInterface:
 
 
 class Server:
-    def __init__(self, client_PID):
+    def __init__(self, client_pid):
         god.server = self
         object_data.load_all("assets/objects")
         self.abort = False
@@ -37,7 +37,7 @@ class Server:
         self.world = World()
         self.clients: dict[int, ClientInterface] = {}
         self.conn = SocketServerConnection(self)
-        self.client_PID = client_PID
+        self.client_PID = client_pid
         self.last_client_check = god.world.get_ticks()
         self.frozen = False
         if self.client_PID is not None:
@@ -189,6 +189,14 @@ class Server:
                 self.world.pause()
             for client in self.clients.values():
                 client.conn.mail(constants.MAIL_PAUSE_STATUS, paused=self.world.paused)
+        elif mail.compare(constants.MAIL_COPY_CONFIG):
+            if mail.client_id in self.world.players:
+                player = self.world.players[mail.client_id]
+                self.world.copy_config(player, mail.reset)
+        elif mail.compare(constants.MAIL_PASTE_CONFIG):
+            if mail.client_id in self.world.players:
+                player = self.world.players[mail.client_id]
+                self.world.paste_config(player)
 
     def force_disconnect(self, client: ClientInterface, timeout=False):
         self.clients.pop(client.id)

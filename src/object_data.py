@@ -257,6 +257,7 @@ class LightData:
 class BuildingStateData:
     default: bool
     default_image: bool
+    raycast_can_use: bool
     name: str
     image_name: str
     light: LightData | None
@@ -284,6 +285,7 @@ class BuildingOD(ObjectData, type_name="Building"):
         "inventory_kind": None,
         "vegetation_requirement": None,
         "debug_attach_offset": None,
+        "has_configuration": False,
     }
 
     size: tuple[int, int]
@@ -293,6 +295,7 @@ class BuildingOD(ObjectData, type_name="Building"):
     static: bool
     replace_tile: bool
     interface: bool
+    has_configuration: bool
     break_time_s: float
     energy_radius: float
     hitbox_multiplier: float
@@ -346,6 +349,7 @@ class BuildingOD(ObjectData, type_name="Building"):
             state = BuildingStateData(
                 default,
                 default_image,
+                state_data.get("raycast_can_use", True),
                 state_name,
                 image_name,
                 LightData(light["radius"], light["intensity"], light["color"])
@@ -355,6 +359,8 @@ class BuildingOD(ObjectData, type_name="Building"):
             states[state_name] = state
             if default:
                 states["default"] = state
+            if default_image:
+                states["default_image"] = state
         self.states = states
         self.break_requirements = [ItemOD.get(req) for req in self.break_requirements]
         if self.vegetation_requirement is not None:

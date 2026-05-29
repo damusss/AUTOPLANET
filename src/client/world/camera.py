@@ -7,7 +7,7 @@ from src.client import god
 class Camera:
     def __init__(self):
         god.camera = self
-        self.zoom = 1
+        self.zoom = 1.0
         self.pos = pygame.Vector2()
 
     def frame(self):

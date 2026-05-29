@@ -4,6 +4,7 @@ import random
 from src.server import god
 from src.object_data import TileOD, VegetationOD
 
+
 class NoiseSettings:
     def __init__(
         self,
@@ -86,7 +87,7 @@ ISLAND_NOISE = NoiseSettings(
 ISLANDS_A = DistributionSettings(ISLAND_NOISE, 0.80, "islands_a")
 ISLANDS_B = DistributionSettings(ISLAND_NOISE, 0.80, "islands_b")
 
-OXYGEN_PLANT = DistributionSettings((0.43, 1, 1, 1), 0.33, "oxygen_plant")
+OXYGEN_PLANT = DistributionSettings((0.43, 1, 1, 1), 0.35, "oxygen_plant")
 LIGHT_TREE = DistributionSettings((0.43, 1, 1, 1), 0.24, "light_tree")
 NYLIUM_GRASS = DistributionSettings((0.15, 2, 0.5, 2), 0.55, "nylium_grass")
 FLOWERS = DistributionSettings((0.25, 2, 0.5, 2), 0.38, "flowers")
@@ -187,15 +188,15 @@ def underground_biome_handler(rel_y, wx, abs_y):
     return [tile_type.uid, solid, ore_amount], plant_data
 
 
-def mold_layer_biome_handler(rel_y, wx, abs_y):
+def mold_layer_biome_handler(_rel_y, _wx, _abs_y):
     return [TileOD.objects.mold_patch.uid, 1, 1000], None
 
 
-def deep_underground_biome_handler(rel_y, wx, abs_y):
+def deep_underground_biome_handler(_rel_y, _wx, _abs_y):
     return [TileOD.objects.iron_ore.uid, 1, 1000], None
 
 
-def last_biome_handler(rel_y, wx, abs_y):
+def last_biome_handler(_rel_y, _wx, _abs_y):
     return [TileOD.objects.diamond_ore.uid, 1, 1000], None
 
 
@@ -222,4 +223,4 @@ def get_random_seed():
 
 
 def get_random_2d_seed():
-    return (get_random_seed(), get_random_seed())
+    return get_random_seed(), get_random_seed()

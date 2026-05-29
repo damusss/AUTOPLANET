@@ -81,7 +81,7 @@ class CameraUI:
             )
             icon_size = 0.5
             left_rect = pygame.FRect(0, 0, icon_size, icon_size).move_to(
-                topright=(rect.center)
+                topright=rect.center
             )
             right_rect = pygame.FRect(0, 0, icon_size, icon_size).move_to(
                 topleft=rect.center
@@ -164,7 +164,7 @@ class CameraUI:
             self.render_trajectory_debug()
         if god.player.building_preview is not None:
             self.render_building_preview(
-                god.input.mouse_world,
+                god.user_input.mouse_world,
                 god.player.building_preview,
                 god.player.building_available,
             )
@@ -183,7 +183,7 @@ class CameraUI:
     def render_raycast(self):
         color = constants.HOVERING_TILE_COLOR
         distance = god.player.pos.distance_to(god.player.raycast.hitbox.center)
-        if distance > (constants.PLAYER_REACH_RADIUS) or not (
+        if distance > constants.PLAYER_REACH_RADIUS or not (
             god.player.raycast.object_data.break_requirements is None
             or god.player.inventory_slots[constants.INVENTORY_HAND_I].contains_any(
                 god.player.raycast.object_data.break_requirements,
@@ -300,7 +300,12 @@ class CameraUI:
         )
 
     def render_building_preview(
-        self, center, preview: BuildingOD, available, player_pos=None, energy_debug=True
+        self,
+        center,
+        preview: BuildingOD,
+        available,
+        player_pos=None,
+        energy_debug=True,
     ):
         size = preview.size
         if preview.static:
@@ -315,7 +320,7 @@ class CameraUI:
                 center[1] - size[1] / 2,
             )
         rect = pygame.FRect(topleft, size)
-        color = color = (
+        color = (
             constants.GREEN_GOOD
             if available == constants.BUILDING_STATUS_AVAILABLE
             else constants.RED_BAD

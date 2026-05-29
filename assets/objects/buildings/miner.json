@@ -2,6 +2,7 @@
     "size": [2, 2],
     "floor_whitelist": ["core", "ammonia_deposit", "iron_ore", "copper_ore"],
     "inventory_kind": "output",
+    "debug_attach_offset": [0, -0.6],
     "states": {
         "on": {
             "default_image": true,

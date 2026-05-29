@@ -21,12 +21,12 @@ class RaycastInfoUI:
         col_w = god.windowing.width * constants.UI_RAYCAST_INFO_W_MULT
         cs = col_w * constants.UI_RAYCAST_INFO_CORNER_SIZE_MULT
         if (
-                raycast is None
-                or raycast is constants.UI_RAYCAST_EMPTY
-                or raycast.type == constants.RAYCAST_EMPTY
+            raycast is None
+            or raycast is constants.UI_RAYCAST_EMPTY
+            or raycast.type == constants.RAYCAST_EMPTY
         ):
             self.try_render_building_status(0, col_w, cs)
-            return
+            return 0
         bottom = self.try_render_building_status(0, col_w, cs)
         if raycast.object_data is not None:
             bottom = self.render_main(bottom, raycast, col_w, cs, self.b, self.b * 2)
@@ -39,12 +39,14 @@ class RaycastInfoUI:
                 bottom, raycast, col_w, cs, self.b, self.b * 2
             )
         elif raycast.type == constants.RAYCAST_DROP:
-            bottom = self.render_drop_amount(
-                bottom, raycast, col_w, cs, self.b, self.b * 2
-            )
+            self.render_drop_amount(bottom, raycast, col_w, cs, self.b, self.b * 2)
         elif raycast.type == constants.RAYCAST_BUILDING:
             if raycast.object_data.need_energy or raycast.object_data.interface:
                 bottom = self.render_building_interaction(
+                    bottom, raycast, col_w, cs, self.b, self.b * 2
+                )
+            if isinstance(raycast.data[-1], list):
+                bottom = self.render_extra_building_data(
                     bottom, raycast, col_w, cs, self.b, self.b * 2
                 )
             bottom = self.render_object_pos(
@@ -52,7 +54,9 @@ class RaycastInfoUI:
             )
         elif raycast.type == constants.RAYCAST_VEGETATION:
             if len(raycast.object_data.item_drop) > 0:
-                bottom = self.render_drops(bottom, raycast, col_w, cs, self.b, self.b * 2)
+                bottom = self.render_drops(
+                    bottom, raycast, col_w, cs, self.b, self.b * 2
+                )
             bottom = self.render_object_pos(
                 bottom, raycast, col_w, cs, self.b, self.b * 2
             )
@@ -89,6 +93,7 @@ class RaycastInfoUI:
             bottom = self.render_slot_filter(
                 bottom, raycast, col_w, cs, self.b, self.b * 2
             )
+        return bottom
 
     def try_render_building_status(self, top, col_w, cs):
         if god.player.building_preview is not None:
@@ -102,7 +107,7 @@ class RaycastInfoUI:
 
     def render_slot_filter(self, top, raycast: "UIRaycastHit", col_w, cs, bb, b):
         content_w = col_w - b * 2
-        title_h = content_w * (constants.UI_RAYCAST_INFO_MSG_H_MULT)
+        title_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
         text = "Unknown Slot Filter"
         if raycast.filter[0] == constants.INVENTORY_FILTER_CATEGORY:
             text = f"Slot Category Whitelist: {', '.join([constants.ITEM_CATEGORY_NAMES[cat] for cat in raycast.filter[1]])}"
@@ -137,10 +142,11 @@ class RaycastInfoUI:
         )
 
         subtitle_rect = subtitle_rect.move_to(midtop=(box.centerx, box.top + bb))
-        to_draw = [(subtitle_tex, subtitle_rect, None)]
+        to_draw: list = [(subtitle_tex, subtitle_rect, None)]
 
         for item_od, amount in raycast.item.create_data.recipe:
             item_count = god.player.count_item(item_od)
+            amount_col = "white"
             if item_count >= amount:
                 amount_col = constants.GREEN_GOOD
             else:
@@ -336,8 +342,8 @@ class RaycastInfoUI:
                 "<r1>", god.player.building_preview.altitude_range[0]
             ).replace("<r2>", god.player.building_preview.altitude_range[1])
         elif (
-                god.player.building_available
-                == constants.BUILDING_STATUS_MISSING_VEGETATION
+            god.player.building_available
+            == constants.BUILDING_STATUS_MISSING_VEGETATION
         ):
             status = status.replace(
                 "<vegetation>",
@@ -361,7 +367,7 @@ class RaycastInfoUI:
         return box.bottom
 
     def render_building_floor_whitelist(
-            self, top, building_od: BuildingOD, col_w, cs, bb, b
+        self, top, building_od: BuildingOD, col_w, cs, bb, b
     ):
         content_w = col_w - b * 2
         subtitle_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
@@ -435,6 +441,104 @@ class RaycastInfoUI:
         render_panel_bg(box, cs)
         for tex, rect in to_draw:
             tex.draw(None, rect)
+        return box.bottom
+
+    def render_extra_building_data(
+        self, top, raycast: shared.RaycastHit, col_w, cs, bb, b
+    ):
+        content_w = col_w - b * 2
+        title_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        ind_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        ind_label_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
+        box = pygame.Rect(god.windowing.width - col_w - bb, top + bb, col_w, bb)
+        to_draw = []
+        to_draw_alpha = []
+        for section_name, indicators in raycast.data[-1]:
+            title_tex, title_rect = god.assets.font.get_texture_and_rect(
+                section_name, "white", title_h
+            )
+            to_draw.append((title_tex, title_rect.move_to(midtop=box.midbottom)))
+            box.h += title_rect.h + bb
+            for indicator in indicators:
+                match indicator:
+                    case ["text", color, text]:
+                        text_tex, text_rect = god.assets.font.get_texture_and_rect(
+                            text, color, ind_label_h, content_w
+                        )
+                        jump = max(ind_h, text_rect.height)
+                        to_draw.append(
+                            (
+                                text_tex,
+                                text_rect.move_to(
+                                    center=(box.centerx, box.bottom + jump / 2)
+                                ),
+                            )
+                        )
+                        box.h += jump
+                    case ["item", uid, count]:
+                        item = ItemOD.get(uid)
+                        image = god.assets.item_texs[item.name_id]
+                        display_text = f"{f'(x{count}) ' if count is not None else ''}{item.display_name}"
+                        text_tex, text_rect = god.assets.font.get_texture_and_rect(
+                            display_text, "white", ind_label_h, content_w - ind_h / 2
+                        )
+                        jump = max(ind_h, text_rect.height)
+                        to_draw.append(
+                            (
+                                image,
+                                pygame.Rect(0, 0, ind_h, ind_h).move_to(
+                                    midright=(box.right - b, box.bottom + jump / 2)
+                                ),
+                            )
+                        )
+                        to_draw.append(
+                            (
+                                text_tex,
+                                text_rect.move_to(
+                                    center=(
+                                        box.centerx,
+                                        box.bottom + jump / 2,
+                                    )
+                                ),
+                            )
+                        )
+                        box.h += jump
+                    case ["progress", percentage, icon_name]:
+                        icon = god.assets.icons_texs[icon_name]
+                        icon_size = content_w / 2
+                        icon_rect = pygame.Rect(0, 0, icon_size, icon_size).move_to(
+                            midtop=(box.centerx, box.bottom)
+                        )
+                        to_draw_alpha.append(
+                            (icon, None, icon_rect, constants.UI_INTERFACE_ICON_ALPHA)
+                        )
+                        perc_source_h = icon.height * percentage
+                        perc_icon_h = icon_rect.w * percentage
+                        to_draw_alpha.append(
+                            (
+                                icon,
+                                pygame.Rect(
+                                    0,
+                                    icon.height - perc_source_h,
+                                    icon.height,
+                                    perc_source_h,
+                                ),
+                                icon_rect.move_to(height=perc_icon_h).move(
+                                    0, icon_rect.w - perc_icon_h
+                                ),
+                                constants.OPAQUE,
+                            ),
+                        )
+                        box.h += icon_size
+
+                box.h += bb
+        box.h += bb
+        render_panel_bg(box, cs)
+        for tex, rect in to_draw:
+            tex.draw(None, rect)
+        for tex, srcrect, rect, alpha in to_draw_alpha:
+            tex.alpha = alpha
+            tex.draw(srcrect, rect)
         return box.bottom
 
     def render_drop_amount(self, top, raycast: shared.RaycastHit, col_w, cs, bb, b):
@@ -537,28 +641,46 @@ class RaycastInfoUI:
         return box.bottom
 
     def render_building_interaction(
-            self, top, raycast: shared.RaycastHit, col_w, cs, bb, b
+        self, top, raycast: shared.RaycastHit, col_w, cs, bb, b
     ):
         content_w = col_w - b * 2
         box = pygame.Rect(god.windowing.width - bb - col_w, top + bb, col_w, bb)
-        text_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
+        text_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        small_text_h = content_w * constants.UI_RAYCAST_INFO_SMALL_NOTE_H_MULT
         to_draw = []
         if raycast.object_data.interface:
             if (
-                    god.player.pos.distance_to(raycast.hitbox.center)
-                    <= constants.PLAYER_INTERACT_RADIUS
+                god.player.pos.distance_to(raycast.hitbox.center)
+                <= constants.PLAYER_INTERACT_RADIUS
             ):
-                text = "Right click to interact."
+                text = "- Right click to interact."
                 if raycast.object_data == BuildingOD.objects.bot:
-                    text += "\nMiddle click to edit trajectory."
+                    text += "\n- Middle click to edit the trajectory."
+                if raycast.object_data.has_configuration:
+                    text += "\n- CTRL+C to copy the configuration."
             else:
-                text = "Too far to interact."
+                text = "- Too far to interact."
+                if raycast.object_data.has_configuration:
+                    text += "\n- CTRL+C to copy the configuration."
+            # god.assets.font.font.align = pygame.FONT_LEFT
             click_tex, click_rect = god.assets.font.get_texture_and_rect(
-                text, constants.UI_INFO_DESCR_COL, text_h, content_w
+                text, constants.UI_INFO_DESCR_COL, small_text_h, content_w
             )
+            # god.assets.font.font.align = pygame.FONT_CENTER
             to_draw.append((click_tex, click_rect.move_to(midtop=box.midbottom)))
             box.h += click_rect.h + bb
-        text_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        if god.player.config_clipboard is not None:
+            if god.user_input.can_paste_config():
+                text = "- CTRL+V to paste configuration."
+                col = "white"
+            else:
+                text = "- Cannot paste the configuration here."
+                col = constants.YELLOW_WARNING
+            paste_tex, paste_rect = god.assets.font.get_texture_and_rect(
+                text, col, small_text_h, content_w
+            )
+            to_draw.append((paste_tex, paste_rect.move_to(midtop=box.midbottom)))
+            box.h += paste_rect.h + bb
         if raycast.object_data.need_energy:
             if raycast.data[2]:
                 text = "Has energy"
@@ -646,9 +768,10 @@ class RaycastInfoUI:
         elif raycast.type in [constants.RAYCAST_DROP, constants.RAYCAST_UI_ITEM]:
             object_tex = god.assets.item_texs[raycast.object_data.name_id]
         elif raycast.type == constants.RAYCAST_BUILDING:
-            object_tex = god.assets.building_texs[
-                raycast.object_data.states[raycast.data[1]].image_name
-            ]
+            state = raycast.object_data.states[raycast.data[1]]
+            if not state.raycast_can_use:
+                state = raycast.object_data.states["default_image"]
+            object_tex = god.assets.building_texs[state.image_name]
         elif raycast.type == constants.RAYCAST_VEGETATION:
             object_tex = god.assets.vegetation_texs[raycast.object_data.name_id]
         image_rect = pygame.Rect(
@@ -657,7 +780,8 @@ class RaycastInfoUI:
             image_w,
             image_w,
         )
-        object_tex.draw(None, image_rect)
+        if object_tex:
+            object_tex.draw(None, image_rect)
 
         descr_tex.draw(
             None, descr_rect.move_to(midtop=(image_rect.centerx, image_rect.bottom + b))

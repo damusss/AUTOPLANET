@@ -42,3 +42,4 @@ class Windowing:
             self.window.destroy()
             pygame.quit()
             return "abort"
+        return None

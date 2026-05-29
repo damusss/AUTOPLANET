@@ -71,7 +71,7 @@ class Client:
 
             for other_player_id, other_player_data in mail.op.items():
                 if mail.missing_fields(
-                    "p", "v", "fk", "fi", "bp", "ba", data=other_player_data
+                    "p", "v", "fk", "fi", "bp", "ba", cont_data=other_player_data
                 ):
                     continue
                 other_player_id = int(other_player_id)
@@ -122,6 +122,13 @@ class Client:
                 )
         elif mail.compare(constants.MAIL_PAUSE_STATUS):
             self.world.paused = mail.paused
+        elif mail.compare(constants.MAIL_UPDATE_CONFIG_CLIPBOARD):
+            if mail.clipboard is not None:
+                self.world.player.config_clipboard = (
+                    shared.ConfigClipboard.from_client_data(mail.clipboard)
+                )
+            else:
+                self.world.player.config_clipboard = None
 
     def disconnect(self):
         self.mailbox.queue.clear()
@@ -158,7 +165,7 @@ class Client:
             self.input.event(event)
             self.state.event(event)
 
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_c:  # temp
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_m:  # temp
                 if not constants.MULTIPLAYER:
                     if self.offline_localhost_server_process is None:
                         self.offline_localhost_server_process = subprocess.Popen(

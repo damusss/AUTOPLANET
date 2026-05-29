@@ -13,9 +13,10 @@ else:
 
 
 class PlayerLike:
+    name: str
     pos: pygame.Vector2
     vel: pygame.Vector2
-    texture: Texture
+    texture: Texture|None
     light: LightData
     name_texture: Texture
 
@@ -30,9 +31,9 @@ class OtherPlayer(PlayerLike):
         self.vel = pygame.Vector2()
         self.frame_kind = "idle"
         self.frame_index = 0
-        self.texture = None
-        self.building_preview: list = None
-        self.break_data: tuple[int, tuple[float, float], float] | None = None
+        self.texture: Texture|None = None
+        self.building_preview: list|None = None
+        self.break_data: tuple[int, tuple[float, float], float] | list | None = None
         self.light = LightData(
             f"other_player_{player_id}",
             constants.PLAYER_LIGHT_RADIUS,
@@ -64,7 +65,8 @@ class Player(PlayerLike):
         self.jumping = False
         self.energy = constants.PLAYER_MAX_ENERGY
         self.health = constants.PLAYER_MAX_HEALTH
-        self.raycast: shared.RaycastHit = None
+        self.raycast: shared.RaycastHit|None = None
+        self.config_clipboard: shared.ConfigClipboard|None = None
         self.edit_trajectory_bot = None
         self.edit_trajectory_kind = "input"
         self.break_start_time = None
@@ -96,10 +98,10 @@ class Player(PlayerLike):
             constants.PLAYER_HITBOX,
         )
 
-    def set_building_preview(self, preview):
+    def set_building_preview(self, preview: BuildingOD|None):
         if preview is None:
             self.building_preview = None
-            if not god.input.manual_energy_debug:
+            if not god.user_input.manual_energy_debug:
                 god.rendering.energy_debug = False
         else:
             self.building_preview = preview
@@ -110,7 +112,7 @@ class Player(PlayerLike):
                 != constants.ENDPOINT_MACHINE
             ):
                 god.rendering.energy_debug = True
-                god.input.manual_energy_debug = False
+                god.user_input.manual_energy_debug = False
 
     def set_edit_trajectory(self, bid):
         if bid is None:
@@ -207,7 +209,7 @@ class Player(PlayerLike):
             god.client.conn.mail(
                 constants.MAIL_BUILDING_AVAILABLE,
                 building_uid=self.building_preview.uid,
-                pos=tuple(god.input.mouse_world),
+                pos=tuple(god.user_input.mouse_world),
             )
             if self.count_item(self.building_preview.item) < 1:
                 self.set_building_preview(None)

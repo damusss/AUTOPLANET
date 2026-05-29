@@ -7,7 +7,9 @@ import pygame
 from src import shared
 from src import constants
 from src.client import god
+from src.client.rendering import RenderingLayer, SpecialBuildingRenderer
 from src.client.ui import screen_ui, camera_ui
+from src.client.world import special_renderers
 from src.object_data import ItemOD, BuildingOD
 from src.client.world.chunk import LightData
 
@@ -31,6 +33,7 @@ class WorldRendering:
         self.trajectory_debug = False
         self.edit_trajectory_hover_available = constants.BUILDING_STATUS_AVAILABLE
         self.edit_trajectory_too_far_units = None
+        assert special_renderers
         self.refresh_light_textures()
         if constants.NEW_RENDER and False:
             self.star_intermediate_texture = Texture(
@@ -213,7 +216,6 @@ class WorldRendering:
                     pos = god.world.other_players[player_id].pos
                 else:
                     continue
-
             god.assets.light_tex.draw(
                 None,
                 god.camera.rect_to_screen(
@@ -280,19 +282,23 @@ class WorldRendering:
         self.renderer.draw_color = 0
         self.renderer.clear()
 
-        vegetation_layers = []
-        building_layers = []
+        vegetation_layers: list[RenderingLayer] = []
+        building_layers: list[tuple[RenderingLayer, list[SpecialBuildingRenderer]]] = []
         for chunk in god.world.loaded_chunks.values():
             if "tiles" in chunk.layers:
                 chunk.layers["tiles"].render(self.renderer)
             if "vegetation" in chunk.layers:
                 vegetation_layers.append(chunk.layers["vegetation"])
             if "static_buildings" in chunk.layers:
-                building_layers.append(chunk.layers["static_buildings"])
+                building_layers.append(
+                    (chunk.layers["static_buildings"], chunk.special_building_renderers)
+                )
         for layer in vegetation_layers:
             layer.render(self.renderer)
-        for layer in building_layers:
+        for layer, special_building_renderers in building_layers:
             layer.render(self.renderer)
+            for special_renderer in special_building_renderers:
+                special_renderer.render(self.renderer)
         self.render_drops()
         for id_, data in god.world.moving_buildings_data.items():
             self.render_moving_building(

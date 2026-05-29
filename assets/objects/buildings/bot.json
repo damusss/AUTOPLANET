@@ -6,6 +6,7 @@
     "break_time_s": 0.8,
     "hitbox_multiplier": 0.65,
     "inventory_kind": "in_out",
+    "has_configuration": true,
     "states": {
         "": {
             "light": {

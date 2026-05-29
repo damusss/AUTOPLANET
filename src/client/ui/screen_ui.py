@@ -1,9 +1,11 @@
+import typing
+
 import pygame
 
 from src import shared
 from src import constants
 from src.client import god
-from src.object_data import ItemOD
+from src.object_data import ItemOD, BuildingOD
 from src.client.ui import buildings
 from src.client.ui.panel import render_panel_bg, render_panel_outline
 from src.client.ui.raycast_info import RaycastInfoUI
@@ -43,8 +45,10 @@ class ScreenUI:
         self.inventory = InventoryInterface()
         self.crafting_interface = CraftingInterface()
         self.cursor = constants.CURSOR_IDLE_WORLD
-        self.overlay_menu_func = None
-        self.building_interfaces: dict[str, BuildingInterface] = (
+        self.overlay_menu_func: (
+            typing.Callable[[pygame.Rect], shared.Slot | None] | None
+        ) = None
+        self.building_interfaces: dict[BuildingOD, BuildingInterface] = (
             BuildingInterface.get_interfaces()
         )
         assert buildings
@@ -182,6 +186,25 @@ class ScreenUI:
             key_tex.draw(None, key_rect.move_to(center=rect.center))
             left += size + self.b
 
+    def render_drag_enabled(self):
+        text_h = god.windowing.width * constants.UI_DRAG_ENABLED_TEXT_H
+        drag_tex, drag_rect = god.assets.font.get_texture_and_rect("Drag enabled", constants.UI_INFO_DESCR_COL, text_h)
+        drag_rect = drag_rect.move_to(
+            midbottom=(
+                god.user_input.mouse_screen.x,
+                god.user_input.mouse_screen.y - constants.UI_CURSOR_OFFSET * 2,
+            )
+        )
+        god.assets.font.font.outline = 1
+        drag_tex_outline, drag_rect_outline = god.assets.font.get_texture_and_rect(
+            "Drag enabled",
+            "black",
+            text_h,
+        )
+        god.assets.font.font.outline = 0
+        drag_tex_outline.draw(None, drag_rect_outline.move_to(center=drag_rect.center))
+        drag_tex.draw(None, drag_rect)
+
     def render_edit_trajectory(self):
         text_h = god.windowing.width * constants.UI_EDIT_TRAJECTORY_TEXT_H
         error = god.rendering.edit_trajectory_too_far_units is not None
@@ -199,6 +222,9 @@ class ScreenUI:
             else constants.RED_BAD,
             text_h,
         )
+        error_text = ""
+        error_rect = error_rect_outline = kind_rect
+        error_tex = error_tex_outline = kind_tex
         if error:
             error_text = f"Trajectory is {god.rendering.edit_trajectory_too_far_units} units too long"
             error_tex, error_rect = god.assets.font.get_texture_and_rect(
@@ -223,8 +249,8 @@ class ScreenUI:
         )
         kind_rect = kind_rect.move_to(
             midbottom=(
-                god.input.mouse_screen.x,
-                god.input.mouse_screen.y - constants.UI_CURSOR_OFFSET * 2,
+                god.user_input.mouse_screen.x,
+                god.user_input.mouse_screen.y - constants.UI_CURSOR_OFFSET * 2,
             )
         )
         kind_tex_outline.draw(None, kind_rect_outline.move_to(center=kind_rect.center))
@@ -273,6 +299,8 @@ class ScreenUI:
         self.b = god.windowing.width * (constants.UI_BORDER_PERCENT / 100)
         if god.player.edit_trajectory_bot is not None:
             self.render_edit_trajectory()
+        elif god.user_input.drag_enabled:
+            self.render_drag_enabled()
         right = self.render_stats()
         self.render_debug_indicators(right)
         self.render_craft_queue()
@@ -282,7 +310,7 @@ class ScreenUI:
         if self.inventory_open:
             cont, hovering_slot = self.inventory.render(self.b)
             crafting_slot = False
-            if cont.collidepoint(god.input.mouse_screen):
+            if cont.collidepoint(god.user_input.mouse_screen):
                 self.ui_raycast = constants.UI_RAYCAST_EMPTY
                 self.cursor = constants.CURSOR_IDLE_UI
             if hovering_slot:
@@ -301,6 +329,8 @@ class ScreenUI:
                 if slot is not None:
                     hovering_slot = slot
                     self.cursor = constants.CURSOR_HOVER
+                    if self.open_interface.display_recipe:
+                        crafting_slot = True
             if hovering_slot is not None:
                 if hovering_slot.empty:
                     if hovering_slot.filter:
@@ -322,7 +352,7 @@ class ScreenUI:
             if self.inventory.left_panning or self.inventory.right_panning:
                 self.cursor = constants.CURSOR_HOVER
         if self.ui_raycast != prev_ray and not cont.collidepoint(
-            god.input.mouse_screen
+            god.user_input.mouse_screen
         ):
             pygame.event.post(
                 pygame.Event(
@@ -337,7 +367,7 @@ class ScreenUI:
     def render_floating_slot(self, cont: pygame.Rect):
 
         rect = god.player.inventory_slots[0].hitbox.move_to(
-            center=god.input.mouse_screen
+            center=god.user_input.mouse_screen
         )
         self.inventory.render_slot(
             rect,
@@ -345,7 +375,7 @@ class ScreenUI:
             None,
             render_bg=False,
         )
-        if not cont.collidepoint(god.input.mouse_screen):
+        if not cont.collidepoint(god.user_input.mouse_screen):
             icon = god.assets.icons_texs["drop"]
             icon.color = constants.GREEN_GOOD
             icon.alpha = constants.UI_SLOT_GHOST_ALPHA

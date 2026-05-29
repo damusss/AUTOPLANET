@@ -1,3 +1,5 @@
+import typing
+
 import pygame
 
 from src import constants
@@ -7,6 +9,9 @@ if constants.NEW_RENDER:
     from pygame._render import Texture, Renderer
 else:
     from pygame._sdl2 import Texture, Renderer
+
+if typing.TYPE_CHECKING:
+    from src.client.world.chunk import BuildingDataHolder
 
 
 class RenderingLayer:
@@ -71,3 +76,20 @@ class MeshRenderingLayer(RenderingLayer):
             self.texture,
             transform_matrix=matrix,
         )
+
+class SpecialBuildingRenderer:
+    REGISTERED_RENDERERS = {}
+
+    def __init__(self, data: "BuildingDataHolder"):
+        self.data = data
+
+    def __init_subclass__(cls, name_id: str):
+        SpecialBuildingRenderer.REGISTERED_RENDERERS[name_id] = cls
+
+    @classmethod
+    def get_renderer(cls, name_id: str):
+        return cls.REGISTERED_RENDERERS.get(name_id, cls)
+
+    def render(self, renderer: Renderer):
+        ...
+

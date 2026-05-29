@@ -12,7 +12,7 @@ class Connection:
         self.connected = False
         self.last_heartbeat = time.time()
 
-    def mail(self, mail): ...
+    def mail(self, mail, **data): ...
     def mail_connect(self): ...
 
     def frame(self):
@@ -43,10 +43,10 @@ class SocketConnection(Connection):
         self.socket = None
         self.buffer = ""
 
-    def mail(self, type, **data):
+    def mail(self, type_, **data):
         if not self.connected:
             return
-        sock = {"type": type, "client_id": self.client.id, "data": data}
+        sock = {"type": type_, "client_id": self.client.id, "data": data}
         sock = json.dumps(sock, separators=constants.JSON_SEPS) + "\n"
         try:
             self.socket.sendall(sock.encode("utf-8"))

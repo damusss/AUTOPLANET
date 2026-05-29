@@ -5,7 +5,7 @@
     "energy_endpoint_type": "transmitter",
     "replace_tile": true,
     "floor": true,
-    "air": true,
+    "air": false,
     "break_time_s": 1,
     "states": {
         "on": {

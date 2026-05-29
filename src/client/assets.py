@@ -23,7 +23,7 @@ class FontHandler:
     def resize_wraplength(self, wraplength, text_height):
         return wraplength * (self.font.get_height() / text_height)
 
-    def get_texture(self, text, color=None, wraplength=0, get_line_no=False) -> Texture:
+    def get_texture(self, text, color=None, wraplength=0) -> tuple[Texture, int]:
         key = f"{text}_{self.font.outline}"
         if key not in self.cached_simple_textures:
             surf = self.font.render(
@@ -38,15 +38,13 @@ class FontHandler:
             self.cached_simple_textures[key] = tex
         tex = self.cached_simple_textures[key]
         tex.color = color if color else (255, 255, 255)
-        if get_line_no:
-            return tex, int(tex.height / self.font.get_height())
-        return tex
+        return tex, int(tex.height / self.font.get_height())
 
     def get_texture_and_rect(
         self, text, color, ui_height, ui_wraplength=0
     ) -> tuple[Texture, pygame.Rect]:
         texture, lines = self.get_texture(
-            text, color, self.resize_wraplength(ui_wraplength, ui_height), True
+            text, color, self.resize_wraplength(ui_wraplength, ui_height)
         )
         if lines > 1:
             return texture, pygame.Rect(
@@ -89,6 +87,7 @@ class Assets:
         self.load_items()
         self.load_icons()
         self.load_vegetation()
+        self.load_attachments()
         self.load_buildings()
         self.load_building_previews()
         self.load_energy_debug()
@@ -171,6 +170,13 @@ class Assets:
                 shared.log(f"Missing image 'vegetation/{vegetation}.png'")
                 self.vegetation_texs[vegetation] = self.placeholder_tex
 
+    def load_attachments(self):
+        self.attachment_texs: dict[str, Texture] = {}
+        for filename in os.listdir("assets/images/items/attachments"):
+            name = filename.split(".")[0]
+            surf = self.load(f"items/attachments/{filename}")
+            self.attachment_texs[name] = self.load_tex(surf)
+
     def load_buildings(self):
         self.buildings: dict[str, pygame.Surface] = {}
         self.building_texs: dict[str, Texture] = {}
@@ -209,17 +215,23 @@ class Assets:
                     self.building_texs[state.image_name] = self.placeholder_tex
 
     def load_items(self):
+        self.items: dict[str, pygame.Surface] = {}
         self.item_texs: dict[str, Texture] = {}
         self.drop_inflate_percentages: dict[str, float] = {}
+        placeholder = pygame.transform.smoothscale(
+            self.placeholder.convert(32), (constants.TILE_PX, constants.TILE_PX)
+        )
         for item in ItemOD.get_all().keys():
             try:
                 surf = self.load(f"items/{item}.png")
+                self.items[item] = surf
                 self.item_texs[item] = self.load_tex(surf)
                 mask = pygame.mask.from_surface(surf)
                 bounding = mask.get_bounding_rects()[0]
                 self.drop_inflate_percentages[item] = surf.height / bounding.h
             except FileNotFoundError:
                 shared.log(f"Missing image 'items/{item}.png'")
+                self.items[item] = placeholder
                 self.item_texs[item] = self.placeholder_tex
 
     def load_building_previews(self):

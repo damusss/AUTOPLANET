@@ -23,7 +23,7 @@ class CommonBuildingExt:
     def __init__(self, building: "Building|MovingBuilding"):
         self.building = building
         self.destroyed = False
-        self.inventories: dict[str, BuildingInventory|None] = {
+        self.inventories: dict[str, BuildingInventory | None] = {
             "in": None,
             "out": None,
             "upgrade": None,
@@ -58,7 +58,7 @@ class CommonBuildingExt:
                         slot.amount,
                     )
 
-    def get_inventories_data(self):
+    def get_inventories_data(self) -> dict:
         data = {"inventories": {}}
         added = set()
         for name, inv in self.inventories.items():
@@ -77,8 +77,14 @@ class CommonBuildingExt:
     def on_inventory_dirty(self):
         self.building.refresh_interact()
 
+    def get_extra_raycast_data(self): ...
+
+    def get_config(self):
+        return {}
+
 
 class MovingBuildingExt(CommonBuildingExt):
+    building: "MovingBuilding"
     REGISTERED_EXTENSIONS: dict[str, type["MovingBuildingExt"]] = {}
 
     def __init__(self, building: "MovingBuilding"):
@@ -94,7 +100,7 @@ class MovingBuildingExt(CommonBuildingExt):
             building.building_od.name_id, MovingBuildingExt
         )(building)
 
-    def on_reach(self, target: "Building", kind: str): ...
+    def on_reach(self, target: "Building|None", kind: str | None): ...
 
     def get_inventories_data(self):
         data = super().get_inventories_data()
@@ -105,6 +111,7 @@ class MovingBuildingExt(CommonBuildingExt):
 
 
 class BuildingExt(CommonBuildingExt):
+    building: "Building"
     REGISTERED_EXTENSIONS: dict[str, type["BuildingExt"]] = {}
 
     def __init__(self, building: "Building"):
@@ -225,11 +232,15 @@ class Building:
         self.ext.on_destroy()
         self.refresh_interact()
 
-    def get_raycast_data(self):
+    def get_raycast_data(self, raycast_flag):
+        if raycast_flag == constants.RAYCASTFLAG_INFO:
+            extra_data = self.ext.get_extra_raycast_data()
+            if extra_data is not None:
+                return [self.id, self.state, self.has_energy, extra_data]
         return [self.id, self.state, self.has_energy]
 
     def get_client_data(self):
-        data = [
+        data: list = [
             self.id,
             self.building_od.uid,
             int(self.hitbox.x),
@@ -252,7 +263,7 @@ class MovingBuilding:
         self.subscribed_client_players: list["Player"] = []
         self.moving = False
         self.move_target: Building | None = None
-        self.target_kind: str = None
+        self.target_kind: str | None = None
         self.last_known_center = self.center
         self.last_known_time = 0
         self.last_known_direction = pygame.Vector2(-1, 0)
@@ -278,8 +289,7 @@ class MovingBuilding:
     def collapse_position(self):
         if self.moving and not god.world.paused:
             self.center = self.last_known_center + self.last_known_direction * (
-                ((god.world.get_ticks() - self.last_known_time) / 1000)
-                * self.speed_ps
+                ((god.world.get_ticks() - self.last_known_time) / 1000) * self.speed_ps
             )
 
     def refresh_trajectory(self):
@@ -307,7 +317,9 @@ class MovingBuilding:
         self.update_trajectory_chunks(chunks)
         self.depart(self.trajectory["in"], constants.INVENTORY_KIND_INPUT)
 
-    def depart(self, target: Building, kind):
+    def depart(self, target: Building | None, kind):
+        if target is None:
+            return
         self.moving = True
         self.last_known_center = self.center
         self.last_known_time = god.world.get_ticks()
@@ -362,7 +374,11 @@ class MovingBuilding:
         self.ext.on_destroy()
         self.refresh_interact()
 
-    def get_raycast_data(self):
+    def get_raycast_data(self, raycast_flag):
+        if raycast_flag == constants.RAYCASTFLAG_INFO:
+            extra_data = self.ext.get_extra_raycast_data()
+            if extra_data is not None:
+                return [self.id, "", extra_data]
         return [self.id, ""]
 
     def get_client_data(self):
@@ -372,7 +388,13 @@ class MovingBuilding:
             round(self.center.y, constants.DIGIT_PRECISION),
             math.copysign(1, self.last_known_direction.x),
             {
-                name: (None if val is None else ([val.id, tuple(val.hitbox), val.building_od.debug_attach_offset]))
+                name: (
+                    None
+                    if val is None
+                    else (
+                        [val.id, tuple(val.hitbox), val.building_od.debug_attach_offset]
+                    )
+                )
                 for name, val in self.trajectory.items()
             },
             self.ext.get_display_data(),

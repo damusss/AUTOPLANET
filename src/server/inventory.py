@@ -134,14 +134,15 @@ class Inventory(CommonInventory):
     def client_action(self, action, source, dest, amount):
         other_source_inventory: CommonInventory | None = None
         other_dest_inventory: CommonInventory | None = None
-        concentrate_source: list[shared.Slot] = None
-        source_slot: shared.Slot = None
-        dest_slot: shared.Slot = None
+        concentrate_source: list[shared.Slot] | None = None
+        source_slot: shared.Slot | None = None
+        dest_slot: shared.Slot | None = None
         mult = 1
         if source["cont"] == "player":
             if source["slot"] is not None:
                 try:
-                    source_slot = self.slots[source["slot"]]
+                    slot_i: int = source["slot"]
+                    source_slot = self.slots[slot_i]
                 except IndexError:
                     source_slot = None
             else:
@@ -156,15 +157,17 @@ class Inventory(CommonInventory):
                     other_source_inventory = inventory
                     if source["slot"] is not None:
                         try:
-                            source_slot = other_source_inventory.slots[source["slot"]]
+                            slot_i: int = source["slot"]
+                            source_slot = inventory.slots[slot_i]
                         except IndexError:
                             source_slot = None
                     else:
                         source_slot = None
-                        concentrate_source = other_source_inventory.slots
+                        concentrate_source = inventory.slots
         if dest["cont"] == "player":
             try:
-                dest_slot = self.slots[dest["slot"]]
+                slot_i: int = dest["slot"]
+                dest_slot = self.slots[slot_i]
             except IndexError:
                 dest_slot = None
         elif dest["cont"] in ["left", "right"]:
@@ -178,7 +181,8 @@ class Inventory(CommonInventory):
                 if inventory is not None:
                     other_dest_inventory = inventory
                     try:
-                        dest_slot = other_dest_inventory.slots[dest["slot"]]
+                        slot_i: int = dest["slot"]
+                        dest_slot = inventory.slots[slot_i]
                     except IndexError:
                         dest_slot = None
         if source_slot is dest_slot:

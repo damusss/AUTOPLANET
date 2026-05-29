@@ -81,7 +81,7 @@ class CraftingInterface:
                     constants.OPAQUE,
                 )
             icon = god.assets.icons_texs[cat["icon"]]
-            hovering = hover_rect.collidepoint(god.input.mouse_screen)
+            hovering = hover_rect.collidepoint(god.user_input.mouse_screen)
             if hovering:
                 god.ui.cursor = constants.CURSOR_HOVER
             icon.alpha = (

@@ -7,8 +7,10 @@ from src import constants
 from src.client import god
 from src.object_data import BigStar, BlackHole, TileOD, BuildingOD, VegetationOD
 from src.client.rendering import (
+    RenderingLayer,
     MeshRenderingLayer,
     TextureRenderingLayer,
+    SpecialBuildingRenderer,
 )
 
 if constants.NEW_RENDER:
@@ -81,7 +83,7 @@ class BuildingDataHolder:
         return self.data[5]
 
     @property
-    def extra(self):
+    def extra(self) -> dict | None:
         return self.data[6] if len(self.data) >= 7 else None
 
 
@@ -97,6 +99,7 @@ class Chunk:
             self.world_topleft, (constants.CHUNK_SIZE, constants.CHUNK_SIZE)
         )
         self.static_buildings = [BuildingDataHolder(bd) for bd in data["buildings"]]
+        self.special_building_renderers: list[SpecialBuildingRenderer] = []
         self.energy_conns = {}
         self.trajectory_conns = set()
         self.load_connections(data)
@@ -111,10 +114,11 @@ class Chunk:
         self.tiles_mat = data["tiles"]
 
         self.tile_hitboxes = {}
-        self.tiles_texture: Texture = None
-        self.static_buildings_texture: Texture = None
+        self.tiles_texture: Texture | None = None
+        self.vegetation_texture: Texture | None = None
+        self.static_buildings_texture: Texture | None = None
 
-        self.layers: dict[str, TextureRenderingLayer] = {}
+        self.layers: dict[str, RenderingLayer] = {}
         thread = threading.Thread(target=self.render_static)
         thread.start()
 
@@ -160,10 +164,10 @@ class Chunk:
                 )
             )
             self.vegetation.append(
-                [
+                (
                     plant_od,
                     hitbox,
-                ]
+                )
             )
             if plant_od.light is not None:
                 self.lights.append(
@@ -300,7 +304,7 @@ class Chunk:
 
     def render_static_buildings(self):
         padding = constants.BUILDING_MAX_SIZE - 1
-        surf_w = (constants.CHUNK_SIZE + (padding) * 2) * constants.TILE_PX
+        surf_w = (constants.CHUNK_SIZE + padding * 2) * constants.TILE_PX
         surface = pygame.Surface((surf_w, surf_w), pygame.SRCALPHA)
         for bdata in self.static_buildings:
             image = god.assets.buildings[
@@ -309,6 +313,13 @@ class Chunk:
             rel_x = bdata.topleft_x - self.world_topleft.x + padding
             rel_y = bdata.topleft_y - self.world_topleft.y + padding
             surface.blit(image, (rel_x * constants.TILE_PX, rel_y * constants.TILE_PX))
+            if bdata.extra is not None:
+                self.special_building_renderers.append(
+                    SpecialBuildingRenderer.get_renderer(bdata.building_od.name_id)(
+                        bdata
+                    )
+                )
+
         self.static_buildings_texture = Texture.from_surface(
             god.windowing.renderer, surface
         )
@@ -320,7 +331,7 @@ class Chunk:
 
     def render_vegetation(self):
         padding = constants.VEGETATION_MAX_SIZE - 1
-        surf_w = (constants.CHUNK_SIZE + (padding) * 2) * constants.TILE_PX
+        surf_w = (constants.CHUNK_SIZE + padding * 2) * constants.TILE_PX
         surface = pygame.Surface((surf_w, surf_w), pygame.SRCALPHA)
         for plant_od, hitbox in self.vegetation:
             image = god.assets.vegetation[plant_od.name_id]
@@ -351,5 +362,6 @@ class Chunk:
         self.loaded = False
         self.tiles_texture = None
         self.static_buildings_texture = None
+        self.special_building_renderers = []
         self.vegetation_texture = None
         self.layers.clear()

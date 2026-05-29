@@ -79,7 +79,7 @@ class InventoryInterface:
         for i, slot in enumerate(self.pan_source):
             if i in self.right_panned_slots:
                 continue
-            if slot.hitbox.collidepoint(god.input.mouse_screen):
+            if slot.hitbox.collidepoint(god.user_input.mouse_screen):
                 source = self.floating_slot.source_slot
                 if slot.empty or (source.item == slot.item and not slot.full):
                     if slot is not source:
@@ -103,7 +103,7 @@ class InventoryInterface:
         for i, slot in enumerate(self.pan_source):
             if i in self.left_panned_slot_i:
                 continue
-            if slot.hitbox.collidepoint(god.input.mouse_screen):
+            if slot.hitbox.collidepoint(god.user_input.mouse_screen):
                 if slot.empty and slot.check_filter(self.left_pan_item):
                     self.left_panned_slot_i.add(i)
                     amount_per_slot_f = self.left_pan_amount / (
@@ -165,10 +165,13 @@ class InventoryInterface:
             return god.player.inventory_slots
         if god.ui.open_interface is None:
             return []
+        if slot.cont is None:
+            return []
         if slot.cont.endswith("in"):
             return god.ui.open_interface.inventories["in"]
         if slot.cont.endswith("out"):
             return god.ui.open_interface.inventories["in"]
+        return []
 
     def mouse_clicked(self, event: pygame.Event, interface_slots: list[shared.Slot]):
         for slot in god.player.inventory_slots + interface_slots:
@@ -357,7 +360,7 @@ class InventoryInterface:
     def render_slot(
         self,
         rect: pygame.Rect,
-        slot: "shared.Slot",
+        slot: "shared.Slot|shared.CraftQueueItem",
         hovering_slot=None,
         empty_icon=None,
         render_bg=True,
@@ -369,7 +372,7 @@ class InventoryInterface:
         image_percentage=1,
     ):
         slot.hitbox = rect
-        hovering = rect.collidepoint(god.input.mouse_screen) and render_bg and can_hover
+        hovering = rect.collidepoint(god.user_input.mouse_screen) and render_bg and can_hover
         if render_bg:
             render_panel(
                 rect,

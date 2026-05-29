@@ -8,18 +8,22 @@ from src.object_data import BuildingOD
 
 class Input:
     def __init__(self):
-        god.input = self
+        god.user_input = self
         self.input_dir = pygame.Vector2()
         self.mouse_screen = pygame.Vector2()
         self.mouse_world = pygame.Vector2()
         self.manual_energy_debug = False
+        self.place_time = 0
+        self.place_pos = None
+        self.drag_enabled = False
         # temp connect to server
-        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_c))
+        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_m, mod=0))
 
     def event(self, event: pygame.Event):
         if event.type == pygame.MOUSEWHEEL:
             god.world.camera.zoom_event(event.y)
         if event.type == pygame.MOUSEBUTTONUP:
+            self.drag_enabled = False
             if event.button == pygame.BUTTON_RIGHT:
                 god.ui.inventory.end_right_pan()
             elif event.button == pygame.BUTTON_LEFT:
@@ -40,6 +44,8 @@ class Input:
                         building_uid=god.player.building_preview.uid,
                         pos=tuple(self.mouse_world),
                     )
+                    self.place_time = god.world.get_ticks()
+                    self.place_pos = self.mouse_world
                 elif (
                     event.button == pygame.BUTTON_RIGHT
                     and god.player.raycast is not None
@@ -136,6 +142,12 @@ class Input:
                 god.rendering.trajectory_debug = not god.rendering.trajectory_debug
             if event.key == pygame.K_TAB:
                 god.client.conn.mail(constants.MAIL_TOGGLE_PAUSE)
+            if event.mod & pygame.KMOD_CTRL:
+                if event.key == pygame.K_c:
+                    god.client.conn.mail(constants.MAIL_COPY_CONFIG, reset=False)
+                elif event.key == pygame.K_v:
+                    if self.can_paste_config():
+                        god.client.conn.mail(constants.MAIL_PASTE_CONFIG)
         if event.type == pygame.KEYUP:
             if event.key == pygame.K_e:
                 god.ui.toggle_inventory(True)
@@ -154,6 +166,17 @@ class Input:
                 god.player.set_edit_trajectory(None)
                 if god.ui.inventory_open:
                     god.ui.inventory.floating_slot.source_slot = None
+                god.client.conn.mail(constants.MAIL_COPY_CONFIG, reset=True)
+
+    def can_paste_config(self):
+        return (
+            god.player.raycast is not None
+            and god.player.config_clipboard is not None
+            and god.player.raycast.type == constants.RAYCAST_BUILDING
+            and god.player.raycast.object_data.has_configuration
+            and god.player.raycast.object_data
+            == god.player.config_clipboard.building_od
+        )
 
     def frame(self):
         self.mouse_screen = pygame.Vector2(pygame.mouse.get_pos())
@@ -161,6 +184,7 @@ class Input:
         self.mouse_world = god.camera.from_screen(self.mouse_screen)
         input_dir = pygame.Vector2()
         pressed = pygame.key.get_pressed()
+        mouse_pressed = pygame.mouse.get_pressed()
         if pressed[pygame.K_a] or pressed[pygame.K_LEFT]:
             input_dir.x = -1
         if pressed[pygame.K_d] or pressed[pygame.K_RIGHT]:
@@ -178,3 +202,18 @@ class Input:
             god.client.conn.mail(constants.MAIL_INPUT_DIR, dir=tuple(input_dir))
         if mouse_world != self.mouse_world:
             god.client.conn.mail(constants.MAIL_MOUSE_POS, pos=tuple(self.mouse_world))
+        if (
+            mouse_pressed[0]
+            and self.place_pos is not None
+            and god.player.building_preview is not None
+            and pygame.time.get_ticks() - self.place_time
+            >= constants.DRAG_PLACE_START_COOLDOWN
+        ):
+            self.drag_enabled = True
+            if self.mouse_world.distance_squared_to(self.place_pos) > 0.5 * 0.5:
+                self.place_pos = self.mouse_world
+                god.client.conn.mail(
+                    constants.MAIL_PLACE_BUILDING,
+                    building_uid=god.player.building_preview.uid,
+                    pos=tuple(self.mouse_world),
+                )

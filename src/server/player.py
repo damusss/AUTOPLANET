@@ -12,7 +12,7 @@ from src.server.inventory import Inventory
 
 if typing.TYPE_CHECKING:
     from src.server.server import ClientInterface
-    from src.server.building import Building
+    from src.server.building import Building, MovingBuilding
 
 
 class Player:
@@ -23,11 +23,12 @@ class Player:
         self.input_dir = pygame.Vector2()
         self.health = constants.PLAYER_MAX_HEALTH
         self.energy = constants.PLAYER_MAX_ENERGY
-        self.raycast: shared.RaycastHit|None = None
+        self.raycast: shared.RaycastHit | None = None
         self.inventory = Inventory(self)
         self.craft_queue: deque[shared.CraftQueueItem] = deque()
+        self.config_clipboard: shared.ConfigClipboard | None = None
         self.break_start_time = None
-        self.break_data: shared.RaycastHit|None = None
+        self.break_data: shared.RaycastHit | None = None
         self.break_count: int = 0
         self.last_mold_damage = 0
         self.last_regen = 0
@@ -41,7 +42,7 @@ class Player:
         self.client_mouse_pressing = False
         self.client_building_preview = None
         self.client_building_preview_clear_after = 1
-        self.client_subscribed_building: "Building|None" = None
+        self.client_subscribed_building: "Building|MovingBuilding|None" = None
 
     @property
     def hitbox(self):

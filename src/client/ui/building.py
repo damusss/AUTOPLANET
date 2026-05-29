@@ -6,6 +6,7 @@ from src import shared
 from src import constants
 from src.client import god
 from src.object_data import BuildingOD, ItemOD
+from src.client.ui.panel import IconButton
 from src.client.world.chunk import BuildingDataHolder
 
 
@@ -16,8 +17,8 @@ class BuildingInterface:
 
     def __init__(self):
         self.b = 0
-        self.building_data: BuildingDataHolder = None
-        self.inventories: dict[str, list[shared.Slot]] = {
+        self.building_data: BuildingDataHolder | None = None
+        self.inventories: dict[str, list[shared.Slot] | None] = {
             "in": None,
             "out": None,
             "upgrade": None,
@@ -70,9 +71,7 @@ class BuildingInterface:
         )
         return title_bottom + title_rect.h + self.b * 2
 
-    def render_icon_progress(
-        self, icon, rect, progress_active, start_time, time_s
-    ):
+    def render_icon_progress(self, icon, rect, progress_active, start_time, time_s):
         icon.alpha = constants.UI_INTERFACE_ICON_ALPHA
         icon.draw(None, rect)
         icon.alpha = constants.OPAQUE
@@ -88,12 +87,13 @@ class BuildingInterface:
     def refresh_inventories_data(self, base_data: BuildingDataHolder, building_data):
         self.building_data = base_data
         for name, slots in building_data["inventories"].items():
+            inv = self.inventories[name]
             if slots is None:
                 self.inventories[name] = None
             else:
-                if self.inventories[name] is not None:
+                if inv is not None:
                     for i, slot_data in enumerate(slots):
-                        slot = self.inventories[name][i]
+                        slot = inv[i]
                         prev_amount = slot.amount
                         slot.item = (
                             ItemOD.get(slot_data[0])
@@ -133,3 +133,78 @@ class BuildingInterface:
             building_id=self.building_data.id,
             unsubscribe=True,
         )
+
+class ItemSelectionExtension:
+    def __init__(self, parent:"BuildingInterface", items: list[ItemOD], get_config_func, menu_name):
+        self.enter_selection_rect = None
+        self.items = items
+        self.parent = parent
+        self.get_config_func = get_config_func
+        self.menu_name = menu_name
+        self.item_slots = [shared.Slot(item, 1) for item in items]
+        self.back_btn = IconButton("left-arrow", "0.5", 0.9)
+        self.delete_btn = IconButton("delete", "0.5", 0.6)
+
+    def render_item_selection(self, cont: pygame.Rect):
+        bottom = god.ui.inventory.render_interface_title(
+            self.menu_name, cont.topleft, cont.w, 0.5
+        )
+        pad = cont.w * constants.UI_INVENTORY_PADDING_MULT
+        b = self.parent.b
+        slots_w = cont.w - pad * 2
+        slot_size = god.ui.inventory.slot_size
+        slots_per_row = int(slots_w / (slot_size + b))
+        slot_b = (slots_w - slots_per_row * slot_size) / (slots_per_row - 1)
+        ri = 0
+        ii = 0
+        hovering = None
+        while ii < len(self.item_slots):
+            for ci in range(slots_per_row):
+                rect = pygame.Rect(
+                    cont.x + pad + (slot_size + slot_b) * ci,
+                    bottom + pad + (slot_size + slot_b) * ri,
+                    slot_size,
+                    slot_size,
+                )
+                hovering = god.ui.inventory.render_slot(
+                    rect, self.item_slots[ii], hovering, storage=False
+                )
+                ii += 1
+                if ii >= len(self.item_slots):
+                    break
+            ri += 1
+        left_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            bottomright=(cont.centerx - slot_b, cont.bottom - slot_b)
+        )
+        right_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            bottomleft=(cont.centerx + slot_b, cont.bottom - slot_b)
+        )
+        self.back_btn.render(left_rect)
+        self.delete_btn.render(right_rect)
+        return hovering
+
+    def mouse_clicked(self, event: pygame.Event):
+        if event.button != pygame.BUTTON_LEFT:
+            return
+        if god.ui.overlay_menu_func is not None:
+            if self.back_btn.clicked(event):
+                god.ui.overlay_menu_func = None
+            if self.delete_btn.clicked(event):
+                god.ui.overlay_menu_func = None
+                god.client.conn.mail(
+                    constants.MAIL_BUILDING_CONFIG,
+                    building_id=self.parent.building_data.id,
+                    **self.get_config_func(None)
+                )
+            for slot in self.item_slots:
+                if slot.hitbox.collidepoint(event.pos):
+                    god.client.conn.mail(
+                        constants.MAIL_BUILDING_CONFIG,
+                        building_id=self.parent.building_data.id,
+                        **self.get_config_func(slot.item)
+                    )
+                    god.ui.overlay_menu_func = None
+        else:
+            if self.enter_selection_rect is None or not self.enter_selection_rect.collidepoint(event.pos):
+                return
+            god.ui.overlay_menu_func = self.render_item_selection

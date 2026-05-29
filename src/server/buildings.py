@@ -1,5 +1,3 @@
-import pygame
-
 from src import shared
 from src import constants
 from src.server import god
@@ -35,6 +33,9 @@ class Bot(MovingBuildingExt, name_id="bot"):
                 [self.filter.name_id],
             ]
         self.building.refresh_interact()
+
+    def get_config(self):
+        return {"filter_uid": None if self.filter is None else self.filter.uid}
 
     def get_display_data(self):
         return None if self.slot.empty else self.slot.item.uid
@@ -82,6 +83,45 @@ class Bot(MovingBuildingExt, name_id="bot"):
         data["filter"] = self.filter.uid if self.filter is not None else None
         return data
 
+    def get_extra_raycast_data(self):
+        sections = [
+            [
+                "Contains",
+                [
+                    ["text", constants.UI_INFO_DESCR_COL, "(empty)"]
+                    if self.inventory.empty
+                    else [
+                        "item",
+                        self.slot.item.uid,
+                        self.slot.amount,
+                    ],
+                    [
+                        "text",
+                        constants.GREEN_GOOD
+                        if self.building.moving
+                        else constants.YELLOW_WARNING,
+                        "Moving" if self.building.moving else "Idle",
+                    ],
+                ],
+            ]
+        ]
+        if self.filter is not None:
+            sections.append(["Filter", [["item", self.filter.uid, None]]])
+        if not self.upgrade_slot.empty:
+            sections.append(
+                [
+                    "Upgrade",
+                    [
+                        [
+                            "item",
+                            self.upgrade_slot.item.uid,
+                            self.upgrade_slot.amount,
+                        ]
+                    ],
+                ]
+            )
+        return sections
+
 
 class Lamp(BuildingExt, name_id="lamp"):
     def on_energy_awake(self):
@@ -103,17 +143,33 @@ class Storage(BuildingExt, name_id="storage"):
 class Hopper(BuildingExt, name_id="hopper"):
     def init(self):
         self.slot = Slot(None, 0, None, 0)
-        self.inventories["in"] = BuildingInventory(self, self.slot)
-        self.inventories["out"] = BuildingInventory(self, self.slot)
+        self.inventory = BuildingInventory(self, self.slot)
+        self.inventories["in"] = self.inventory
+        self.inventories["out"] = self.inventory
+
+    def get_extra_raycast_data(self):
+        return [
+            [
+                "Contains",
+                [
+                    ["text", constants.UI_INFO_DESCR_COL, "(empty)"]
+                    if self.inventory.empty
+                    else [
+                        "item",
+                        self.slot.item.uid,
+                        self.slot.amount,
+                    ]
+                ],
+            ]
+        ]
 
 
 class Miner(BuildingExt, name_id="miner"):
     def init(self):
-        self.inventories["out"] = BuildingInventory(self)
+        out_inv = BuildingInventory(self)
         for i in range(2):
-            self.inventories["out"].add_slot(
-                Slot(None, 0, [constants.INVENTORY_FILTER_READONLY], 0)
-            )
+            out_inv.add_slot(Slot(None, 0, [constants.INVENTORY_FILTER_READONLY], 0))
+        self.inventories["out"] = out_inv
         self.working = False
         self.work_start_time = god.world.get_ticks()
         self.tile_datas = []
@@ -199,6 +255,37 @@ class Miner(BuildingExt, name_id="miner"):
         data["work_time"] = self.work_time
         return data
 
+    def get_extra_raycast_data(self):
+        mining = []
+        space = True
+        for tile_data in self.tile_datas:
+            drop = TileOD.get(tile_data[0]).item_drop[0][0]
+            if drop not in mining:
+                mining.append(drop)
+                if not self.out_inv.has_space(drop, 1, ignore_filters=True):
+                    space = False
+        slots = []
+        for drop in mining:
+            slots.append(["item", drop.uid, self.out_inv.count(drop)])
+        if not space:
+            slots.append(["text", constants.RED_BAD, "Full"])
+        if self.working:
+            slots.append(
+                [
+                    "progress",
+                    (god.world.get_ticks() - self.work_start_time)
+                    / 1000
+                    / self.work_time,
+                    "drill",
+                ]
+            )
+        return [
+            [
+                "Mines",
+                slots,
+            ]
+        ]
+
 
 class Crafter(BuildingExt, name_id="crafter"):
     def init(self):
@@ -217,9 +304,16 @@ class Crafter(BuildingExt, name_id="crafter"):
             return
         if mail.recipe_uid is None:
             self.recipe = None
+            self.stop_working()
         else:
             self.recipe = ItemOD.get(mail.recipe_uid)
+            if not self.working:
+                self.try_to_work()
         self.building.refresh_interact()
+        self.building.chunk.refresh()
+
+    def get_config(self):
+        return {"recipe_uid": None if self.recipe is None else self.recipe.uid}
 
     def on_inventory_dirty(self):
         if not self.working:
@@ -269,14 +363,65 @@ class Crafter(BuildingExt, name_id="crafter"):
         return data
 
     def get_extra_data(self):
-        return (
-            {
-                "recipe_uid": self.recipe.uid if self.recipe is not None else None,
-                "work_start_time": shared.eval_delta(self.work_start_time),
-            }
-            if self.working
-            else None
-        )
+        return {
+            "working": self.working,
+            "recipe_uid": self.recipe.uid if self.recipe is not None else None,
+            "work_start_time": shared.eval_delta(self.work_start_time),
+        }
+
+    def get_extra_raycast_data(self):
+        full = False
+        if not self.working and self.recipe is not None:
+            if not self.out_inv.has_space(self.recipe, 1, ignore_filters=True):
+                full = True
+        if self.out_inv.empty:
+            out_indicators = [["text", constants.UI_INFO_DESCR_COL, "(empty)"]]
+        else:
+            out_indicators = []
+            for out_slot in self.out_inv.slots:
+                if out_slot.empty:
+                    continue
+                out_indicators.append(["item", out_slot.item.uid, out_slot.amount])
+            if full:
+                out_indicators.append(["text", constants.RED_BAD, "Full"])
+        if self.in_inv.empty:
+            in_indicators = [["text", constants.UI_INFO_DESCR_COL, "(empty)"]]
+        else:
+            in_indicators = []
+            for in_slot in self.in_inv.slots:
+                if in_slot.empty:
+                    continue
+                in_indicators.append(["item", in_slot.item.uid, in_slot.amount])
+        recipe_indicators = [
+            (
+                ["text", constants.RED_BAD, "Not set"]
+                if self.recipe is None
+                else ["item", self.recipe.uid, None]
+            )
+        ]
+        if self.working:
+            recipe_indicators.append(
+                [
+                    "progress",
+                    (god.world.get_ticks() - self.work_start_time)
+                    / 1000
+                    / self.recipe.create_data.time_s,
+                    "gear",
+                ]
+            )
+        elif not full and self.recipe is not None and self.building.has_energy:
+            recipe_indicators.append(
+                [
+                    "text",
+                    constants.YELLOW_WARNING,
+                    "Empty/bad input",
+                ]
+            )
+        return [
+            ["Output", out_indicators],
+            ["Input", in_indicators],
+            ["Recipe", recipe_indicators],
+        ]
 
 
 class Furnace(BuildingExt, name_id="furnace"):
@@ -336,3 +481,67 @@ class Furnace(BuildingExt, name_id="furnace"):
         data["work_start_time"] = shared.eval_delta(self.work_start_time)
         data["work_time"] = self.smelt_result.create_data.time_s if self.working else 0
         return data
+
+    def get_extra_raycast_data(self):
+        contains_indicators = []
+        if not self.in_inv.empty:
+            contains_indicators.append(
+                [
+                    "item",
+                    self.in_slot.item.uid,
+                    self.in_slot.amount,
+                ]
+            )
+        elif self.out_inv.empty:
+            contains_indicators.append(["text", constants.UI_INFO_DESCR_COL, "(empty)"])
+        if not self.out_inv.empty:
+            contains_indicators.append(
+                [
+                    "item",
+                    self.out_slot.item.uid,
+                    self.out_slot.amount,
+                ]
+            )
+        smelting_indicators = []
+        if self.working:
+            smelting_indicators.append(["item", self.smelt_result.uid, None])
+            smelting_indicators.append(
+                [
+                    "progress",
+                    (god.world.get_ticks() - self.work_start_time)
+                    / 1000
+                    / self.smelt_result.create_data.time_s,
+                    "smelt",
+                ]
+            )
+        else:
+            if not self.out_inv.empty and not self.out_inv.has_space(
+                self.out_slot.item, 1, True
+            ):
+                smelting_indicators.append(
+                    ["text", constants.RED_BAD, "Output is full"]
+                )
+            elif not self.building.has_energy:
+                smelting_indicators.append(
+                    [
+                        "text",
+                        constants.YELLOW_WARNING,
+                        "Empty/bad input",
+                    ]
+                )
+        return (
+            [
+                [
+                    "Contains",
+                    contains_indicators,
+                ],
+                ["Smelting", smelting_indicators],
+            ]
+            if len(smelting_indicators) > 0
+            else [
+                [
+                    "Contains",
+                    contains_indicators,
+                ]
+            ]
+        )

@@ -47,7 +47,10 @@ class Drop:
             raycast = god.world.raycast(self.pos, constants.RAYCASTFLAG_CHUNK)
             if raycast:
                 if raycast.chunk_key != self.chunk.chunk_key:
-                    self.chunk.drops.remove(self)
+                    try:
+                        self.chunk.drops.remove(self)
+                    except ValueError:
+                        ...
                     new = god.world.chunks[raycast.chunk_key]
                     new.drops.append(self)
                     self.chunk = new
@@ -62,7 +65,7 @@ class Drop:
         for chunk in chunks:
             for rect in chunk.tile_hitboxes + chunk.building_floor_hitboxes:
                 if rect.colliderect(hitbox):
-                    if hitbox.bottom < rect.centery and hitbox.bottom > rect.top:
+                    if rect.centery > hitbox.bottom > rect.top:
                         hitbox.bottom = rect.top
                         self.vel = 0
                         self.pos.y += hitbox.y - prev_y

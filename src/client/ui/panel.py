@@ -19,7 +19,7 @@ class IconButton:
     def render(self, rect: pygame.Rect):
         self.hitbox = rect
         cs = self.corner_size
-        hover = rect.collidepoint(god.input.mouse_screen)
+        hover = rect.collidepoint(god.user_input.mouse_screen)
         if isinstance(self.corner_size, str):
             cs = min(self.hitbox.w, self.hitbox.h) * float(self.corner_size)
         render_panel(
@@ -45,7 +45,7 @@ class IconButton:
 def render_panel_bg(
     rect, corner_size, bg_alpha=constants.UI_PANEL_BG_ALPHA, bg_color="black"
 ):
-    return render_panel(rect, corner_size, 0, bg_alpha, 0, bg_color, None)
+    render_panel(rect, corner_size, 0, bg_alpha, 0, bg_color, None)
 
 
 def render_panel_outline(
@@ -55,19 +55,19 @@ def render_panel_outline(
     outline_alpha=constants.UI_PANEL_OUTLINE_ALPHA,
     outline_color="white",
 ):
-    return render_panel(
+    render_panel(
         rect, corner_size, outline_width, 0, outline_alpha, None, outline_color
     )
 
 
 def render_panel(
-    rect: pygame.FRect,
+    rect: pygame.FRect | pygame.Rect,
     corner_size,
     outline_width=2,
     bg_alpha=constants.UI_PANEL_BG_ALPHA,
     outline_alpha=constants.UI_PANEL_OUTLINE_ALPHA,
-    bg_color="black",
-    outline_color="white",
+    bg_color: pygame.typing.ColorLike | None = "black",
+    outline_color: pygame.typing.ColorLike | None = "white",
     sharp_bg_corners=None,
 ):
     if sharp_bg_corners is None:

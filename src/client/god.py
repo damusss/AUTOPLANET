@@ -14,7 +14,7 @@ if typing.TYPE_CHECKING:
 dt: float = 0
 unit_px: float = 0
 ui: ScreenUI = None
-input: Input = None
+user_input: Input = None
 client: Client = None
 assets: Assets = None
 player: Player = None

@@ -10,11 +10,11 @@ if typing.TYPE_CHECKING:
 
 
 class ClientConnection:
-    def __init__(self, client_id, data, server):
+    def __init__(self, client_id, *args):
         self.client_id = client_id
         self.connected = True
 
-    def mail(self, type, data): ...
+    def mail(self, type_, data): ...
 
 
 class SocketClientConnection(ClientConnection):
@@ -23,10 +23,10 @@ class SocketClientConnection(ClientConnection):
         self.socket: socket.socket = data["socket"]
         self.server: "Server" = server
 
-    def mail(self, type, **data):
+    def mail(self, type_, **data):
         if not self.connected:
             return
-        sock = {"type": type, "client_id": self.client_id, "data": data}
+        sock = {"type": type_, "client_id": self.client_id, "data": data}
         sock = json.dumps(sock, separators=constants.JSON_SEPS) + "\n"
         try:
             self.socket.sendall(sock.encode("utf-8"))
@@ -59,8 +59,8 @@ class SocketServerConnection(ServerConnection):
     def close(self):
         self.socket.close()
 
-    def put_mail(self, type, client_id, **data):
-        mail = shared.Mail(type, client_id, **data)
+    def put_mail(self, type_, client_id, **data):
+        mail = shared.Mail(type_, client_id, **data)
         if mail.valid:
             self.server.mailbox.put(mail)
 

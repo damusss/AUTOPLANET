@@ -9,6 +9,22 @@ from src.object_data import ObjectData, TileOD, VegetationOD, BuildingOD, ItemOD
 time_get_ticks = pygame.time.get_ticks
 
 
+class ConfigClipboard:
+    def __init__(self, building_od: BuildingOD, config):
+        self.building_od = building_od
+        self.config = config
+        self.mail = Mail(
+            constants.MAIL_BUILDING_CONFIG, -1, building_id="null", **config
+        )
+
+    def get_client_data(self):
+        return {"uid": self.building_od.uid, "config": self.config}
+
+    @classmethod
+    def from_client_data(cls, data):
+        return ConfigClipboard(BuildingOD.get(data["uid"]), data["config"])
+
+
 class CraftQueueItem:
     def __init__(self, item: ItemOD, amount=1, phantom=False, start_time=None):
         self.item = item
@@ -26,7 +42,7 @@ class CraftQueueItem:
         ]
 
     @classmethod
-    def from_client_data(self, data):
+    def from_client_data(cls, data):
         return CraftQueueItem(
             ItemOD.get(data[0]),
             data[1],
@@ -39,7 +55,7 @@ class Slot:
     hitbox: pygame.Rect
 
     def __init__(self, item, amount, filter_=None, i=-1, cont: str | None = None):
-        self.item: ItemOD = item
+        self.item: ItemOD | None = item
         self.amount = amount
         self.filter = filter_
         self.i = i
@@ -66,8 +82,8 @@ class Slot:
     def contains_any(self, items: list[ItemOD], amount):
         return any((self.contains(item, amount) for item in items))
 
-    def check_filter(self, item: ItemOD):
-        if self.filter is None:
+    def check_filter(self, item: ItemOD | None):
+        if self.filter is None or item is None:
             return True
         if self.filter[0] == constants.INVENTORY_FILTER_WHITELIST:
             return item.name_id in self.filter[1]
@@ -75,6 +91,7 @@ class Slot:
             return item.category in self.filter[1]
         elif self.filter[0] == constants.INVENTORY_FILTER_READONLY:
             return False
+        return True
 
     def get_client_data(self):
         return [
@@ -91,9 +108,9 @@ class RaycastHit:
         self.chunk_key = chunk_key
         self.hitbox: pygame.FRect = hitbox
         self.type: int = type_
-        self.object_data: TileOD | VegetationOD | BuildingOD | ObjectData = object_data
+        self.object_data: TileOD | VegetationOD | BuildingOD = object_data
         self.tile_pos: tuple[int, int] | None = tile_pos
-        self.tile_data: tuple | None = tile_data
+        self.tile_data: list | None = tile_data
         self.data = data
 
     def get_client_data(self):
@@ -122,20 +139,20 @@ class RaycastHit:
 
 
 class Mail:
-    def __init__(self, type, client_id, **data):
-        self.type = type[0]
+    def __init__(self, type_, client_id, **data):
+        self.type = type_[0]
         self.client_id = client_id
         self.data: dict = data
-        self.valid = all((field in self.data for field in type[1]))
+        self.valid = all((field in self.data for field in type_[1]))
         if not self.valid:
             log(
-                f"[ERR] Invalid mail for type {self.type}. Missing fields: {[field for field in type[1] if field not in self.data]}"
+                f"[ERR] Invalid mail for type {self.type}. Missing fields: {[field for field in type_[1] if field not in self.data]}"
             )
         for attr, val in self.data.items():
             setattr(self, attr, val)
 
-    def compare(self, type):
-        return self.type == type[0]
+    def compare(self, type_):
+        return self.type == type_[0]
 
     def missing_fields(self, *required_fields, cont_data=None):
         data = cont_data if cont_data is not None else self.data
@@ -148,6 +165,9 @@ class Mail:
                 f"[ERR] Invalid mail for type {self.type}. Missing fields: {[field for field in required_fields if field not in data]}{cont_str}"
             )
         return result
+
+    def __getattr__(self, name: str):
+        raise AttributeError(f"Mail wasn't assigned the field '{name}'")
 
 
 class CraftAvailabilityStatus:
@@ -171,9 +191,8 @@ def craft_availability_status(
     item: ItemOD,
     count_func,
     craft_amount=1,
-    parent_status: CraftAvailabilityStatus = None,
+    parent_status: CraftAvailabilityStatus | None = None,
 ) -> CraftAvailabilityStatus:
-
     if parent_status:
         status = CraftAvailabilityStatus(
             parent_status.counted_items, parent_status.intermediate_queue
@@ -337,6 +356,7 @@ def other_kind(name, strip=False):
         return "in"
     if name == "output":
         return "in" if strip else "input"
+    raise KeyError
 
 
 def log(*args, **kwargs):
