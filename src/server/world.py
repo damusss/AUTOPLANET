@@ -2,7 +2,6 @@ import pygame
 
 from src import shared
 from src import constants
-from src import object_data
 from src.server import god
 from src.timerc import timerc
 from src.server import terrain
@@ -12,7 +11,8 @@ from src.object_data import TileOD, BuildingOD, ItemOD, VegetationOD
 from src.server.drop import Drop
 from src.server.chunk import Chunk
 from src.server.player import Player
-from src.server.energy import EnergyConn
+from src.server.research import Research
+from src.server.energy import EnergyConn, EnergyPlant
 from src.server.building import Building, MovingBuilding
 
 
@@ -25,17 +25,15 @@ class World:
             self.seeds[ore.name] = terrain.get_random_2d_seed()
         print(f"[S] Random seed configuration: {self.seeds}")
         self.paused = False
+        self.clock = pygame.Clock()
         self.cumulative_pause_ticks = 0
         self.players: dict[int, Player] = {}
-        self.clock = pygame.Clock()
         self.chunks: dict[str, Chunk] = {}
         self.buildings: dict[str, Building | MovingBuilding] = {}
         self.refresh_queued_chunks = set()
         self.disrupt_alerted_buildings = set()
         self.disrupt_alerted_plants = set()
-        self.computers_count = 0
-        self.unlocked_nodes: set[str] = set()
-        self.unlocked_items: set[str] = object_data.ITEMS_STARTER_PACK.copy()
+        self.research: Research = Research()
         timerc.add(constants.DISPLAY_FPS_COOLDOWN, self.display_fps)
         shared.time_get_ticks = self.get_ticks
         building_def.EnergyConn_t = EnergyConn
@@ -59,6 +57,7 @@ class World:
     def player_connect(self, client):
         player = Player(client)
         self.players[client.id] = player
+        return player
 
     def player_disconnect(self, client):
         player = self.players[client.id]
@@ -130,21 +129,6 @@ class World:
             chunks.append(self.load_or_get_chunk(key, (int(cx), int(cy))))
         return chunks
 
-    def player_drops_collisions(
-        self, player: Player, drops: list[Drop], update, drops_data
-    ):
-        hitbox = player.hitbox
-        for drop in list(drops):
-            if drop.hitbox.colliderect(hitbox):
-                not_added = player.inventory.add(drop.item, drop.amount)
-                if not_added == 0:
-                    drop.destroy()
-                else:
-                    drop.amount = not_added
-            if update:
-                drop.frame()
-            drops_data.append(drop.get_client_data())
-
     def refresh_player_chunks(self, player: Player, checked_for_drops: set):
         # collapse moving position
         visible_chunks = set()
@@ -165,8 +149,8 @@ class World:
                 chunk_pos = shared.get_chunk_pos(world_pos)
                 key = shared.get_chunk_key(chunk_pos)
                 chunk = self.load_or_get_chunk(key, chunk_pos)
-                self.player_drops_collisions(
-                    player, chunk.drops, key not in checked_for_drops, drops_data
+                player.drops_collisions(
+                    chunk.drops, key not in checked_for_drops, drops_data
                 )
                 if key not in checked_for_drops:
                     checked_for_drops.add(key)
@@ -234,23 +218,6 @@ class World:
                 refresh=True,
             )
 
-    def refresh_building_interact(self, building: Building | MovingBuilding):
-        for player in building.subscribed_client_players:
-            if building.ext.destroyed:
-                player.client.conn.mail(
-                    constants.MAIL_REFRESH_BUILDING_INTERACT,
-                    base_data=None,
-                    building_data=None,
-                    broken=True,
-                )
-            else:
-                player.client.conn.mail(
-                    constants.MAIL_REFRESH_BUILDING_INTERACT,
-                    base_data=building.get_client_data(),
-                    building_data=building.ext.get_client_data(),
-                    broken=False,
-                )
-
     def building_interact(self, player: Player, building_id: str, unsubscribe):
         if building_id not in self.buildings:
             return
@@ -275,7 +242,7 @@ class World:
         player.client_subscribed_building = building
         if player not in building.subscribed_client_players:
             building.subscribed_client_players.append(player)
-        self.refresh_building_interact(building)
+        building.refresh_interact()
 
     def edit_bot_trajectory(self, bot: MovingBuilding, target: Building, kind: str):
         if bot.building_od != BuildingOD.objects.bot:
@@ -305,7 +272,6 @@ class World:
             valid = True
         if not valid:
             return
-
         other = shared.other_kind(name)
         if bot.trajectory[other] is target:
             bot.trajectory[other] = None
@@ -443,13 +409,20 @@ class World:
                 and veg_data[1] == raycast.tile_pos[1]
             ):
                 for drop in raycast.object_data.item_drop:
-                    self.drop(
-                        shared.get_drop_random_pos(veg_data[3]),
-                        drop[0],
-                        drop[1],
-                    )
+                    for i in range(drop[1]):
+                        self.drop(
+                            shared.get_drop_random_pos(veg_data[3]),
+                            drop[0],
+                            1,
+                        )
                 chunk.vegetation.remove(veg_data)
                 chunk.refresh()
+                if VegetationOD.get(veg_data[2]) == VegetationOD.objects.oxygen_plant:
+                    if isinstance(veg_data[-1], str) and veg_data[-1] in self.buildings:
+                        energy_plant: EnergyPlant = self.buildings[veg_data[-1]].ext
+                        energy_plant.oxygen_plant_count -= 1
+                        if energy_plant.oxygen_plant_count <= 0:
+                            self.break_building(energy_plant.building)
                 return
 
     def break_raycast(self, raycast: shared.RaycastHit, tool: ItemOD | None = None):
@@ -715,11 +688,6 @@ class World:
         chunk.building_ids.add(building.id)
         if building_od.floor:
             building.require_floor = False
-            # below_ray = self.raycast(
-            #    (building.hitbox.centerx, building.hitbox.bottom + 0.5),
-            #    constants.RAYCASTFLAG_COLLIDER,
-            # )
-            # if below_ray is not None:
             chunk.building_floor_hitboxes.append(building.hitbox)
         # else:
         #    building.require_floor = False
@@ -779,7 +747,7 @@ class World:
             int(pos.y - chunk.world_topleft.y),
         )
         if flag == constants.RAYCASTFLAG_VEGETATION:
-            for rel_x, rel_y, plant_uid, hitbox in chunk.vegetation:
+            for rel_x, rel_y, plant_uid, hitbox, *_ in chunk.vegetation:
                 if hitbox.collidepoint(pos):
                     return shared.RaycastHit(
                         chunk_key,
@@ -833,7 +801,7 @@ class World:
                     building.get_raycast_data(flag),
                 )
         if flag == constants.RAYCASTFLAG_INFO:
-            for rel_x, rel_y, plant_uid, hitbox in chunk.vegetation:
+            for rel_x, rel_y, plant_uid, hitbox, *_ in chunk.vegetation:
                 if hitbox.collidepoint(pos):
                     return shared.RaycastHit(
                         chunk_key,

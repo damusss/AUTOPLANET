@@ -107,6 +107,12 @@ class ObjectData:
     def post_setup(self): ...
 
     @classmethod
+    def uid_or_none(cls, od: typing.Self | None) -> int | None:
+        if od is None:
+            return None
+        return od.uid
+
+    @classmethod
     def exists(cls, name_id_or_uid: str | int) -> bool:
         return (
             name_id_or_uid in cls._registered_instances_
@@ -120,7 +126,11 @@ class ObjectData:
         return cls.get_by_name(name_id_or_uid)
 
     @classmethod
-    def get_or[DT](cls, name_id_or_uid: str | int, default: DT) -> typing.Self | DT:
+    def get_or[DT](
+        cls, name_id_or_uid: str | int | None, default: DT
+    ) -> typing.Self | DT:
+        if name_id_or_uid is None:
+            return default
         if cls.exists(name_id_or_uid):
             return cls.get(name_id_or_uid)
         return default
@@ -158,6 +168,10 @@ class ObjectData:
     @classmethod
     def get_list(cls) -> list[typing.Self]:
         return list(cls._registered_instances_.values())
+
+    @classmethod
+    def get_iter(cls) -> typing.Iterator[typing.Self]:
+        yield from cls._registered_instances_.values()
 
     @staticmethod
     def get_type(type_name: str) -> "type[ObjectData]":
@@ -204,6 +218,7 @@ class ItemOD(ObjectData, type_name="Item"):
         "category": None,
         "stack_size": "default",
         "smelt_result": None,
+        "research_time": 0.0,
     }
 
     stack_size: int
@@ -211,6 +226,7 @@ class ItemOD(ObjectData, type_name="Item"):
     smelt_result: "ItemOD|None"
     dropped_by: "TileOD|None"
     category: str | None
+    research_time: float
 
     @property
     def building(self):
@@ -375,10 +391,12 @@ class VegetationOD(ObjectData, type_name="Vegetation"):
         "item_drop": None,
         "light": None,
         "require_floor": True,
+        "harvester_time_s": 0,
     }
 
     size: tuple[float, float]
     break_time_s: float
+    harvester_time_s: float
     break_requirements: list[ItemOD]
     light: LightData | None
     item_drop: list[tuple["ItemOD", int]]
@@ -403,7 +421,7 @@ class VegetationOD(ObjectData, type_name="Vegetation"):
             ]
 
 
-ITEMS_STARTER_PACK: set[str] = set()
+ITEMS_STARTER_PACK: set[ItemOD] = set()
 
 
 class ResearchNodeOD(ObjectData, type_name="ResearchNode"):
@@ -414,6 +432,7 @@ class ResearchNodeOD(ObjectData, type_name="ResearchNode"):
     required_chip: ItemOD
     required_nodes: list["ResearchNodeOD"]
     require_processor: bool
+    cost: int
 
     def post_setup(self):
         self.required_chip = ItemOD.get(f"research_chip_{self.required_chip}")
@@ -428,10 +447,10 @@ class ResearchNodeOD(ObjectData, type_name="ResearchNode"):
 
     @staticmethod
     def global_setup():
-        all_item_names = set(ItemOD.get_all().keys())
-        for research_node in ResearchNodeOD.get_list():
+        all_item_names = set(ItemOD.get_iter())
+        for research_node in ResearchNodeOD.get_iter():
             for item in research_node.unlocks:
-                all_item_names.discard(item.name_id)
+                all_item_names.discard(item)
         ITEMS_STARTER_PACK.update(all_item_names)
 
 

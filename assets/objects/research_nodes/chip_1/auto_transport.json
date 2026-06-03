@@ -1,0 +1,10 @@
+{
+    "display_name": "Automatic Transportation",
+    "description": "NOTIMPLEMENTED",
+    "path_name": "",
+    "required_chip": 1,
+    "require_processor": false,
+    "required_nodes": ["connections"],
+    "unlocks": ["bot", "hopper"],
+    "cost": 40
+}

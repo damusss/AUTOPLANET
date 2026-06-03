@@ -87,7 +87,7 @@ ISLAND_NOISE = NoiseSettings(
 ISLANDS_A = DistributionSettings(ISLAND_NOISE, 0.80, "islands_a")
 ISLANDS_B = DistributionSettings(ISLAND_NOISE, 0.80, "islands_b")
 
-OXYGEN_PLANT = DistributionSettings((0.43, 1, 1, 1), 0.35, "oxygen_plant")
+OXYGEN_PLANT = DistributionSettings((0.38, 1, 1, 1), 0.33, "oxygen_plant")
 LIGHT_TREE = DistributionSettings((0.43, 1, 1, 1), 0.24, "light_tree")
 NYLIUM_GRASS = DistributionSettings((0.15, 2, 0.5, 2), 0.55, "nylium_grass")
 FLOWERS = DistributionSettings((0.25, 2, 0.5, 2), 0.38, "flowers")

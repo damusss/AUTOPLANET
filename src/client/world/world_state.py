@@ -3,6 +3,7 @@ import pygame
 from src import shared
 from src import constants
 from src.client import god
+from src.object_data import ResearchNodeOD, ItemOD
 from src.client.world.chunk import Chunk, BuildingDataHolder
 from src.client.world.camera import Camera
 from src.client.world.world_rendering import WorldRendering
@@ -27,6 +28,9 @@ class WorldState:
         self.drops_data = []
         self.moving_buildings_data = {}
         self.bots_anim_offset = {}
+        self.unlocked_items: set[ItemOD] = set()
+        self.researched_nodes: set[ResearchNodeOD] = set()
+        self.research_progress: dict[ResearchNodeOD, int] = {}
         shared.time_get_ticks = self.get_ticks
 
     def get_ticks(self):

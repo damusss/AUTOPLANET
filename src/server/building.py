@@ -190,7 +190,26 @@ class BuildingExt(CommonBuildingExt):
     def get_extra_data(self): ...
 
 
-class Building:
+class CommonBuilding:
+    def refresh_interact(self):
+        for player in self.subscribed_client_players:
+            if self.ext.destroyed:
+                player.client.conn.mail(
+                    constants.MAIL_REFRESH_BUILDING_INTERACT,
+                    base_data=None,
+                    building_data=None,
+                    broken=True,
+                )
+            else:
+                player.client.conn.mail(
+                    constants.MAIL_REFRESH_BUILDING_INTERACT,
+                    base_data=self.get_client_data(),
+                    building_data=self.ext.get_client_data(),
+                    broken=False,
+                )
+
+
+class Building(CommonBuilding):
     def __init__(self, id_: str, building_od: BuildingOD, topleft, chunk):
         self.id = id_
         self.building_od = building_od
@@ -210,11 +229,6 @@ class Building:
         self.state = state
         self.refresh_interact()
         self.chunk.refresh()
-
-    def refresh_interact(self):
-        if len(self.subscribed_client_players) <= 0:
-            return
-        god.world.refresh_building_interact(self)
 
     def on_place(self):
         self.ext.on_place()
@@ -254,7 +268,7 @@ class Building:
         return data
 
 
-class MovingBuilding:
+class MovingBuilding(CommonBuilding):
     def __init__(self, id_: str, building_od: BuildingOD, center, chunk_key):
         self.id = id_
         self.reach_id = None
@@ -361,11 +375,6 @@ class MovingBuilding:
                 chunk = god.world.chunks[ckey]
                 chunk.moving_building_ids.add(self.id)
                 self.trajectory_chunks.add(ckey)
-
-    def refresh_interact(self):
-        if len(self.subscribed_client_players) <= 0:
-            return
-        god.world.refresh_building_interact(self)
 
     def on_place(self):
         self.ext.on_place()

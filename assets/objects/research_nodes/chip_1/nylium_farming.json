@@ -1,0 +1,10 @@
+{
+    "display_name": "Nylium Farming",
+    "description": "NOTIMPLEMENTED",
+    "path_name": "",
+    "required_chip": 1,
+    "require_processor": false,
+    "required_nodes": ["automation_begins"],
+    "unlocks": ["nylium_harvester"],
+    "cost": 50
+}

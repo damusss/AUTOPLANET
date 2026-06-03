@@ -117,7 +117,9 @@ class Inventory(CommonInventory):
         )
         # temp testing
         self.add(ItemOD.objects.crafter, 5)
+        self.add(ItemOD.objects.nylium_harvester, 5)
         self.add(ItemOD.objects.bricks_platform, 100)
+        self.add(ItemOD.objects.copper_platform, 100)
         self.add(ItemOD.objects.storage, 10)
         self.add(ItemOD.objects.furnace, 5)
         self.add(ItemOD.objects.miner, 5)
@@ -126,7 +128,11 @@ class Inventory(CommonInventory):
         self.add(ItemOD.objects.lamp, 20)
         self.add(ItemOD.objects.iron, constants.DEFAULT_STACK_SIZE)
         self.add(ItemOD.objects.iron_ore, constants.DEFAULT_STACK_SIZE)
-        self.add(ItemOD.objects.bot, 100)
+        self.add(ItemOD.objects.bot, 120 * 3)
+        self.add(ItemOD.objects.computer, 2)
+        self.add(ItemOD.objects.laboratory, 20)
+        self.add(ItemOD.objects.remote_controller, 10)
+        self.add(ItemOD.objects.research_chip_1, 200)
 
     def set_dirty(self):
         self.dirty = True

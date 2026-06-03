@@ -1,6 +1,7 @@
 import typing
 
 import pygame
+from docutils.languages import fa
 
 from src import shared
 from src import constants
@@ -14,6 +15,11 @@ from src.client.world.chunk import BuildingDataHolder
 from src.client.ui.crafting import CraftingInterface
 from src.client.ui.building import BuildingInterface
 from src.client.ui.inventory import InventoryInterface
+
+if constants.NEW_RENDER:
+    from pygame._render import Texture
+else:
+    from pygame._sdl2 import Texture
 
 
 class UIRaycastHit:
@@ -45,6 +51,7 @@ class ScreenUI:
         self.inventory = InventoryInterface()
         self.crafting_interface = CraftingInterface()
         self.cursor = constants.CURSOR_IDLE_WORLD
+        self.hotbar_rect = pygame.Rect()
         self.overlay_menu_func: (
             typing.Callable[[pygame.Rect], shared.Slot | None] | None
         ) = None
@@ -53,14 +60,113 @@ class ScreenUI:
         )
         assert buildings
 
+    def refresh_screen_textures(self):
+        pause_surf = pygame.Surface(god.windowing.size, pygame.SRCALPHA)
+        y = 0
+        while y < pause_surf.height:
+            pygame.draw.line(
+                pause_surf,
+                constants.UI_PAUSE_OVERLAY_COL,
+                (0, y),
+                (pause_surf.width, y),
+                constants.UI_PAUSE_OVERLAY_LINE_HEIGHT,
+            )
+            y += constants.UI_PAUSE_OVERLAY_LINE_HEIGHT * 2
+        self.pause_overlay_tex = Texture.from_surface(self.renderer, pause_surf)
+        self.pause_overlay_tex.alpha = constants.UI_PAUSE_OVERLAY_ALPHA
+
     def mouse_clicked(self, event: pygame.Event):
         interface_slots = []
+        overlay_menu_func = self.overlay_menu_func
         if self.open_interface:
             self.open_interface.mouse_clicked(event)
             interface_slots = self.open_interface.get_slots()
-        if self.overlay_menu_func is not None:
+        if overlay_menu_func is not None:
             return
         self.inventory.mouse_clicked(event, interface_slots)
+
+    def mouse_clicked_outside_inventory(self, event: pygame.Event):
+        for i, slot in enumerate(god.player.hotbar):
+            if slot.item is None or slot.amount <= 0:
+                continue
+            if slot.hitbox.collidepoint(event.pos):
+                self.click_hotbar(i)
+                break
+
+    def click_hotbar(self, i):
+        slot = god.player.hotbar[i]
+        if slot.item is None or slot.amount <= 0:
+            return
+        god.player.set_building_preview(slot.item.building)
+        if god.player.building_preview is None:
+            slot_to_concentrate = None
+            for inv_slot in god.player.inventory_slots:
+                if not inv_slot.empty and inv_slot.item == slot.item:
+                    slot_to_concentrate = inv_slot
+                    break
+            if slot_to_concentrate is not None:
+                self.inventory.floating_slot = FloatingSlot(
+                    slot_to_concentrate, slot_to_concentrate.amount
+                )
+                god.client.conn.mail(
+                    constants.MAIL_INVENTORY_ACTION,
+                    action=constants.INVENTORY_ACTION_CONCENTRATE,
+                    source={"cont": slot_to_concentrate.cont, "slot": None},
+                    dest={
+                        "cont": slot_to_concentrate.cont,
+                        "slot": slot_to_concentrate.i,
+                    },
+                    amount=None,
+                )
+        else:
+            self.inventory.floating_slot = FloatingSlot(None, 0)
+
+    def can_interact_world(self):
+        hovering_hotbar = self.hotbar_rect.collidepoint(god.user_input.mouse_screen)
+        if self.inventory_open:
+            return self.ui_raycast is None
+        return not hovering_hotbar
+
+    def drop_floating_slot(self, whole_stack=False):
+        if self.inventory.floating_slot.source_slot is None:
+            return
+        god.client.conn.mail(
+            constants.MAIL_INVENTORY_ACTION,
+            action=constants.INVENTORY_ACTION_DROP,
+            source={
+                "cont": self.inventory.floating_slot.source_slot.cont,
+                "slot": self.inventory.floating_slot.source_slot.i,
+            },
+            dest={
+                "cont": "right"
+                if god.user_input.mouse_world.x >= god.player.pos.x
+                else "left",
+                "slot": None,
+            },
+            amount=self.inventory.floating_slot.amount if whole_stack else 1,
+        )
+
+    def toggle_inventory(self, manual=False):
+        if not self.inventory_open:
+            self.open_interface = self.crafting_interface
+            god.player.set_building_preview(None)
+            god.player.set_edit_trajectory(None)
+        else:
+            if manual:
+                building = None
+                if self.inventory.floating_slot.source_slot is not None:
+                    if self.inventory.floating_slot.item is not None:
+                        building = self.inventory.floating_slot.item.building
+                if building is not None:
+                    god.player.set_building_preview(building)
+                    self.inventory.floating_slot = FloatingSlot(None, 0)
+            else:
+                self.inventory.floating_slot = FloatingSlot(None, 0)
+            self.open_interface.unsubscribe()
+            self.open_interface.on_exit()
+            self.open_interface = None
+            self.overlay_menu_func = None
+        self.inventory_open = not self.inventory_open
 
     def refresh_building_interact(self, base_data, building_data):
         data_holder = BuildingDataHolder(
@@ -71,6 +177,8 @@ class ScreenUI:
             god.player.set_building_preview(None)
         old_interface = self.open_interface
         self.open_interface = self.building_interfaces[data_holder.building_od]
+        if old_interface != self.open_interface and old_interface:
+            old_interface.on_exit()
         if old_interface != self.open_interface and isinstance(
             old_interface, BuildingInterface
         ):
@@ -82,6 +190,7 @@ class ScreenUI:
         ):
             self.open_interface.unsubscribe()
         self.open_interface.refresh_data(data_holder, building_data)
+        self.open_interface.on_enter()
 
     def render_stats(self):
         box_w = god.windowing.width * constants.UI_BARS_W_MULT
@@ -188,7 +297,9 @@ class ScreenUI:
 
     def render_drag_enabled(self):
         text_h = god.windowing.width * constants.UI_DRAG_ENABLED_TEXT_H
-        drag_tex, drag_rect = god.assets.font.get_texture_and_rect("Drag enabled", constants.UI_INFO_DESCR_COL, text_h)
+        drag_tex, drag_rect = god.assets.font.get_texture_and_rect(
+            "Drag enabled", constants.UI_INFO_DESCR_COL, text_h
+        )
         drag_rect = drag_rect.move_to(
             midbottom=(
                 god.user_input.mouse_screen.x,
@@ -294,6 +405,72 @@ class ScreenUI:
                 ),
             )
 
+    def render_hotbar(self):
+        slot_size = god.windowing.width * constants.UI_HOTBAR_SLOT_SIZE_MULT
+        hotbar_width = slot_size * constants.INVENTORY_HOTBAR_SIZE + self.b * (
+            constants.INVENTORY_HOTBAR_SIZE - 1
+        )
+        self.hotbar_rect = pygame.Rect(
+            god.windowing.width / 2 - hotbar_width / 2,
+            god.windowing.height - self.b - slot_size,
+            hotbar_width,
+            slot_size,
+        )
+        hovering_slot = None
+        for i, slot in enumerate(god.player.hotbar):
+            rect = pygame.Rect(
+                self.hotbar_rect.left + i * (slot_size + self.b),
+                self.hotbar_rect.top,
+                slot_size,
+                slot_size,
+            )
+            hovering_slot = self.inventory.render_slot(
+                rect,
+                slot,
+                hovering_slot,
+                "link",
+                can_hover=not self.inventory_open,
+                render_at_zero=True,
+            )
+            if hovering_slot is not None:
+                self.cursor = constants.CURSOR_HOVER
+        if (
+            not self.inventory_open
+            and self.cursor != constants.CURSOR_HOVER
+            and self.hotbar_rect.collidepoint(god.user_input.mouse_screen)
+        ):
+            self.cursor = constants.CURSOR_IDLE_UI
+        return hovering_slot
+
+    def render_time_pause_overlay(self):
+        self.pause_overlay_tex.draw(None, god.windowing.viewport)
+        god.assets.border_overlay.color = constants.UI_PAUSE_OVERLAY_COL
+        god.assets.border_overlay.alpha = constants.OPAQUE
+        god.assets.border_overlay.draw(None, god.windowing.viewport)
+
+    def render_damage_overlay(self):
+        overlay = god.assets.border_overlay
+        overlay.color = constants.RED_BAD
+        overlay.alpha = int(
+            (
+                (
+                    constants.DAMAGE_OVERLAY_DISAPPEAR_COOLDOWN
+                    - (god.world.get_ticks() - god.player.damage_time)
+                )
+                / constants.DAMAGE_OVERLAY_DISAPPEAR_COOLDOWN
+            )
+            * 255
+        )
+        overlay.draw(
+            pygame.Rect(
+                0,
+                0,
+                overlay.width * constants.UI_DAMAGE_OVERLAY_ZOOM,
+                overlay.height * constants.UI_DAMAGE_OVERLAY_ZOOM,
+            ).move_to(center=(overlay.width / 2, overlay.height / 2)),
+            god.windowing.viewport,
+        )
+
     def render(self):
         self.cursor = constants.CURSOR_IDLE_WORLD
         self.b = god.windowing.width * (constants.UI_BORDER_PERCENT / 100)
@@ -304,6 +481,7 @@ class ScreenUI:
         right = self.render_stats()
         self.render_debug_indicators(right)
         self.render_craft_queue()
+        hotbar_hovered_slot = self.render_hotbar()
         prev_ray = self.ui_raycast
         self.ui_raycast = None
         cont = pygame.Rect()
@@ -351,6 +529,24 @@ class ScreenUI:
                     )
             if self.inventory.left_panning or self.inventory.right_panning:
                 self.cursor = constants.CURSOR_HOVER
+        else:
+            if hotbar_hovered_slot is not None:
+                if hotbar_hovered_slot.item is None:
+                    self.ui_raycast = UIRaycastHit(
+                        None,
+                        False,
+                        0,
+                        constants.RAYCAST_UI_SLOT_FILTER,
+                        hotbar_hovered_slot.filter,
+                    )
+                else:
+                    self.ui_raycast = UIRaycastHit(
+                        hotbar_hovered_slot.item,
+                        False,
+                        hotbar_hovered_slot.amount,
+                        constants.RAYCAST_UI_ITEM,
+                        hotbar_hovered_slot.filter,
+                    )
         if self.ui_raycast != prev_ray and not cont.collidepoint(
             god.user_input.mouse_screen
         ):
@@ -362,10 +558,16 @@ class ScreenUI:
         self.raycast_info.render(self.b)
         if self.inventory.floating_slot.source_slot is not None:
             self.render_floating_slot(cont)
+        if (
+            god.world.get_ticks() - god.player.damage_time
+            < constants.DAMAGE_OVERLAY_DISAPPEAR_COOLDOWN
+        ):
+            self.render_damage_overlay()
+        if god.world.paused:
+            self.render_time_pause_overlay()
         pygame.mouse.set_cursor(self.cursor)
 
     def render_floating_slot(self, cont: pygame.Rect):
-
         rect = god.player.inventory_slots[0].hitbox.move_to(
             center=god.user_input.mouse_screen
         )
@@ -375,7 +577,7 @@ class ScreenUI:
             None,
             render_bg=False,
         )
-        if not cont.collidepoint(god.user_input.mouse_screen):
+        if not cont.collidepoint(god.user_input.mouse_screen) and self.inventory_open:
             icon = god.assets.icons_texs["drop"]
             icon.color = constants.GREEN_GOOD
             icon.alpha = constants.UI_SLOT_GHOST_ALPHA
@@ -387,26 +589,3 @@ class ScreenUI:
                     center=(rect.centerx, rect.centery + rect.h),
                 ),
             )
-
-    def can_interact_world(self):
-        return not self.inventory_open or self.ui_raycast is None
-
-    def toggle_inventory(self, manual=False):
-        if not self.inventory_open:
-            self.open_interface = self.crafting_interface
-            god.player.set_building_preview(None)
-            god.player.set_edit_trajectory(None)
-        else:
-            if manual:
-                building = None
-                if self.inventory.floating_slot.source_slot is not None:
-                    if self.inventory.floating_slot.item is not None:
-                        building = self.inventory.floating_slot.item.building
-                if building is not None:
-                    god.player.set_building_preview(building)
-            if isinstance(self.open_interface, BuildingInterface):
-                self.open_interface.unsubscribe()
-            self.open_interface = None
-            self.inventory.floating_slot = FloatingSlot(None, 0)
-            self.overlay_menu_func = None
-        self.inventory_open = not self.inventory_open

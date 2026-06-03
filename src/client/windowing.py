@@ -31,6 +31,10 @@ class Windowing:
     def height(self):
         return self.window.size[1]
 
+    @property
+    def viewport(self) -> pygame.Rect:
+        return self.renderer.get_viewport()
+
     def frame(self):
         self.renderer.present()
         self.renderer.draw_color = "#000000"

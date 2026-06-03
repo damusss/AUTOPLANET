@@ -58,6 +58,7 @@ class WorldRendering:
         )
         self.energy_debug_overlay_texture.blend_mode = pygame.BLENDMODE_BLEND
         self.energy_debug_overlay_texture.alpha = constants.ENERGY_DEBUG_ALPHA
+        self.ui.refresh_screen_textures()
 
     def render(self):
         self.render_light_overlay()
@@ -175,6 +176,7 @@ class WorldRendering:
                         )
                 self.renderer.draw_color = constants.DEBUG_CHUNK_BORDER_COLOR
                 self.renderer.draw_rect(god.camera.rect_to_screen(chunk.world_rect))
+                self.renderer.draw_color = constants.DEBUG_TILE_HITBOX_COL
         for px, py, uid, amount in god.world.drops_data:
             rect = (
                 px - constants.DROP_SIZE / 2,
@@ -192,7 +194,7 @@ class WorldRendering:
 
         god.assets.white_tex.alpha = constants.OPAQUE
         god.assets.white_tex.color = constants.AMBIENT_COLOR
-        god.assets.white_tex.draw(None, self.renderer.get_viewport())
+        god.assets.white_tex.draw(None, god.windowing.viewport)
 
         moving_lights = []
         for data in god.world.moving_buildings_data.values():
@@ -308,4 +310,4 @@ class WorldRendering:
         self.light_overlay_texture.draw(None, self.lit_texture_layer.get_rect())
 
         self.renderer.target = None
-        self.lit_texture_layer.draw(None, self.renderer.get_viewport())
+        self.lit_texture_layer.draw(None, god.windowing.viewport)

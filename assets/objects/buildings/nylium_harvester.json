@@ -7,8 +7,8 @@
         "on": {
             "default_image": true,
             "light": {
-                "radius": 4,
-                "intensity": 170,
+                "radius": 6,
+                "intensity": 180,
                 "color": "#AA00CC"
             }
         },

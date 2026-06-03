@@ -8,6 +8,7 @@ from src import constants
 from src.server import god
 from src.server import terrain
 from src.object_data import ItemOD, TileOD
+from src.server.drop import Drop
 from src.server.inventory import Inventory
 
 if typing.TYPE_CHECKING:
@@ -25,6 +26,12 @@ class Player:
         self.energy = constants.PLAYER_MAX_ENERGY
         self.raycast: shared.RaycastHit | None = None
         self.inventory = Inventory(self)
+        self.hotbar: list[int | None] = [None] * constants.INVENTORY_HOTBAR_SIZE
+        # temp
+        self.hotbar[0] = ItemOD.objects.energy_plant.uid
+        self.hotbar[1] = ItemOD.objects.computer.uid
+        self.hotbar[2] = ItemOD.objects.copper_platform.uid
+        # endtemp
         self.craft_queue: deque[shared.CraftQueueItem] = deque()
         self.config_clipboard: shared.ConfigClipboard | None = None
         self.break_start_time = None
@@ -32,7 +39,10 @@ class Player:
         self.break_count: int = 0
         self.last_mold_damage = 0
         self.last_regen = 0
+        self.fall_vel = 0
+        self.pos_when_terminal_vel = None
 
+        self.stats_dirty = True
         self.client_frame_kind = "idle"
         self.client_frame_index = 0
         self.client_loaded_chunks = set()
@@ -55,6 +65,18 @@ class Player:
             constants.PLAYER_HITBOX,
         )
 
+    @property
+    def break_mult(self):
+        return constants.REITERATE_BREAK_TIME_MULT if (self.break_count > 0) else 1
+
+    def damage(self, damage):
+        self.health = pygame.math.clamp(
+            self.health - damage,
+            0,
+            constants.PLAYER_MAX_HEALTH,
+        )
+        self.stats_dirty = True
+
     def add_to_craft_queue(self, item, amount, phantom):
         for craft_item in self.craft_queue:
             if craft_item.item == item and craft_item.phantom == phantom:
@@ -75,6 +97,14 @@ class Player:
         for item_od, amount in status.intermediate_queue:
             self.add_to_craft_queue(item_od, amount, True)
         self.add_to_craft_queue(item, 1, False)
+
+    def client_hotbar_action(self, i, item_uid):
+        if i >= len(self.hotbar) or (
+            item_uid is not None and self.inventory.count(ItemOD.get(item_uid)) < 1
+        ):
+            return
+        self.hotbar[i] = item_uid
+        self.stats_dirty = True
 
     def frame(self, rects, drops_data, moving_data):
         self.input_dir.x = pygame.math.lerp(
@@ -124,31 +154,68 @@ class Player:
         self.pos.y += self.vel.y * god.dt
         self.collisions_y(rects)
 
+        if abs(self.vel.y) > constants.ZERO:
+            self.fall_vel = self.vel.y
+            if abs(constants.PLAYER_TERMINAL_VEL - self.fall_vel) < constants.ZERO:
+                if self.pos_when_terminal_vel is None:
+                    self.pos_when_terminal_vel = self.pos.y
+            else:
+                self.pos_when_terminal_vel = None
+        elif (
+            ground := god.world.raycast(
+                (self.pos.x, self.pos.y + 0.8),
+                constants.RAYCASTFLAG_COLLIDER,
+            )
+        ) is not None and ground.hitbox is not None:
+            if self.fall_vel > constants.SAFE_FALL_VEL:
+                fell_tiles = 0
+                if self.pos_when_terminal_vel is not None:
+                    fell_tiles = round(self.pos.y - self.pos_when_terminal_vel)
+                self.damage(
+                    fell_tiles * constants.FALL_DAMAGE_PER_TILE
+                    + constants.FALL_DAMAGE
+                    * (
+                        (self.fall_vel - constants.SAFE_FALL_VEL)
+                        / (constants.PLAYER_TERMINAL_VEL - constants.SAFE_FALL_VEL)
+                    )
+                )
+            self.pos_when_terminal_vel = None
+            self.fall_vel = 0
+
         if self.client_building_preview is not None:
             if self.client_building_preview_clear_after <= 0:
                 self.client_building_preview = None
             self.client_building_preview_clear_after -= 1
 
-        health_dirty = False
         if self.health < constants.PLAYER_MAX_HEALTH:
             if (
                 god.world.get_ticks() - self.last_regen
                 >= constants.PLAYER_HEALTH_REGEN_COOLDOWN
             ):
                 self.last_regen = god.world.get_ticks()
-                self.health = pygame.math.clamp(
-                    self.health + constants.PLAYER_HEALTH_REGEN_AMOUNT,
-                    0,
-                    constants.PLAYER_MAX_HEALTH,
-                )
-                health_dirty = True
+                self.damage(-constants.PLAYER_HEALTH_REGEN_AMOUNT)
 
         self.handle_mouse_input()
         self.handle_craft_queue()
 
         self.mail_physics(drops_data, moving_data)
-        if self.inventory.dirty or health_dirty:
+        if self.inventory.dirty or self.stats_dirty:
             self.mail_stats()
+
+    def drops_collisions(
+        self, drops: list[Drop], update: bool, drops_data: list
+    ):
+        hitbox = self.hitbox
+        for drop in list(drops):
+            if drop.hitbox.colliderect(hitbox):
+                not_added = self.inventory.add(drop.item, drop.amount)
+                if not_added == 0:
+                    drop.destroy()
+                else:
+                    drop.amount = not_added
+            if update:
+                drop.frame()
+            drops_data.append(drop.get_client_data())
 
     def handle_craft_queue(self):
         if len(self.craft_queue) <= 0:
@@ -168,55 +235,6 @@ class Player:
             craft_item.start_time = god.world.get_ticks()
             if craft_item.amount <= 0:
                 self.craft_queue.popleft()
-
-    def mail_physics(self, drops_data, moving_data):
-        other_player_stats = {}
-        for player in god.server.world.players.values():
-            if player is self:
-                continue
-            other_player_stats[player.client.id] = {
-                "p": [round(p, constants.DIGIT_PRECISION) for p in tuple(player.pos)],
-                "v": [round(p, constants.DIGIT_PRECISION) for p in tuple(player.vel)],
-                "fk": player.client_frame_kind,
-                "fi": player.client_frame_index,
-                "bp": player.client_building_preview,
-                "ba": [
-                    shared.eval_delta(player.break_start_time),
-                    player.break_data.hitbox.center,
-                    player.break_data.object_data.break_time_s * player.break_mult,
-                    [player.break_data.object_data.uid, player.break_data.data[0]]
-                    if player.break_data.type == constants.RAYCAST_BUILDING
-                    else None,
-                ]
-                if player.break_data is not None
-                else None,
-            }
-
-        self.client.conn.mail(
-            constants.MAIL_PLAYER_PHYSICS,
-            p=tuple(self.pos),
-            v=tuple(self.vel),
-            e=self.energy,
-            r=self.raycast.get_client_data()
-            if self.raycast and self.raycast.type != constants.RAYCAST_EMPTY
-            else None,
-            op=other_player_stats,
-            ds=drops_data,
-            ms=moving_data,
-            cq=[item.get_client_data() for item in self.craft_queue],
-        )
-
-    def mail_stats(self):
-        self.client.conn.mail(
-            constants.MAIL_PLAYER_STATS,
-            health=self.health,
-            inventory=self.inventory.get_client_data(),
-        )
-        self.inventory.dirty = False
-
-    @property
-    def break_mult(self):
-        return constants.REITERATE_BREAK_TIME_MULT if (self.break_count > 0) else 1
 
     def handle_mouse_input(self):
         if not self.client_mouse_pressing:
@@ -278,12 +296,7 @@ class Player:
                             god.world.get_ticks() - self.last_mold_damage
                             >= constants.MOLD_BREAK_DAMAGE_COOLDOWN
                         ):
-                            self.health = pygame.math.clamp(
-                                self.health - constants.MOLD_BREAK_DAMAGE,
-                                0,
-                                constants.PLAYER_MAX_HEALTH,
-                            )
-                            self.mail_stats()
+                            self.damage(constants.MOLD_BREAK_DAMAGE)
                             self.last_mold_damage = god.world.get_ticks()
 
     def collisions_x(self, rects: list[pygame.FRect]):
@@ -291,6 +304,11 @@ class Player:
         hitbox = self.hitbox
         for rect in rects:
             if rect.colliderect(hitbox):
+                if (
+                    hitbox.bottom <= rect.top + constants.ZERO * 100
+                    or hitbox.top >= rect.bottom - constants.ZERO * 100
+                ):
+                    continue
                 do_break = False
                 if rect.centerx > hitbox.right > rect.left:
                     hitbox.right = rect.left - constants.ZERO
@@ -324,3 +342,50 @@ class Player:
                 if do_break:
                     self.pos.y += hitbox.y - prev_hitbox.y
                     break
+
+    def mail_physics(self, drops_data, moving_data):
+        other_player_stats = {}
+        for player in god.server.world.players.values():
+            if player is self:
+                continue
+            other_player_stats[player.client.id] = {
+                "p": [round(p, constants.DIGIT_PRECISION) for p in tuple(player.pos)],
+                "v": [round(p, constants.DIGIT_PRECISION) for p in tuple(player.vel)],
+                "fk": player.client_frame_kind,
+                "fi": player.client_frame_index,
+                "bp": player.client_building_preview,
+                "ba": [
+                    shared.eval_delta(player.break_start_time),
+                    player.break_data.hitbox.center,
+                    player.break_data.object_data.break_time_s * player.break_mult,
+                    [player.break_data.object_data.uid, player.break_data.data[0]]
+                    if player.break_data.type == constants.RAYCAST_BUILDING
+                    else None,
+                ]
+                if player.break_data is not None
+                else None,
+            }
+
+        self.client.conn.mail(
+            constants.MAIL_PLAYER_PHYSICS,
+            p=tuple(self.pos),
+            v=tuple(self.vel),
+            e=self.energy,
+            r=self.raycast.get_client_data()
+            if self.raycast and self.raycast.type != constants.RAYCAST_EMPTY
+            else None,
+            op=other_player_stats,
+            ds=drops_data,
+            ms=moving_data,
+            cq=[item.get_client_data() for item in self.craft_queue],
+        )
+
+    def mail_stats(self):
+        self.client.conn.mail(
+            constants.MAIL_PLAYER_STATS,
+            health=self.health,
+            inventory=self.inventory.get_client_data(),
+            hotbar=self.hotbar,
+        )
+        self.inventory.dirty = False
+        self.stats_dirty = False

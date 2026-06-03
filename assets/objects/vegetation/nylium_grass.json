@@ -3,5 +3,6 @@
     "description": "NOTIMPLEMENTED",
     "size": [1, 1],
     "break_time_s": 0.7,
-    "item_drop": [["nylium_fiber", 2]]
+    "harvester_time_s": 3,
+    "item_drop": [["nylium_fiber", 3]]
 }

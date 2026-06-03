@@ -3,7 +3,7 @@ from src import constants
 from src.server import god
 from src.timerc import timerc
 from src.shared import Slot
-from src.object_data import ItemOD, TileOD
+from src.object_data import ItemOD, TileOD, ResearchNodeOD, VegetationOD
 from src.server.building import BuildingExt, MovingBuildingExt
 from src.server.inventory import BuildingInventory
 
@@ -35,7 +35,7 @@ class Bot(MovingBuildingExt, name_id="bot"):
         self.building.refresh_interact()
 
     def get_config(self):
-        return {"filter_uid": None if self.filter is None else self.filter.uid}
+        return {"filter_uid": ItemOD.uid_or_none(self.filter)}
 
     def get_display_data(self):
         return None if self.slot.empty else self.slot.item.uid
@@ -80,7 +80,7 @@ class Bot(MovingBuildingExt, name_id="bot"):
 
     def get_client_data(self):
         data = self.get_inventories_data()
-        data["filter"] = self.filter.uid if self.filter is not None else None
+        data.update(self.get_config())
         return data
 
     def get_extra_raycast_data(self):
@@ -123,6 +123,106 @@ class Bot(MovingBuildingExt, name_id="bot"):
         return sections
 
 
+class Computer(BuildingExt, name_id="computer"):
+    def init(self):
+        self.slot = Slot(
+            None,
+            0,
+            [
+                constants.INVENTORY_FILTER_WHITELIST,
+                ["remote_controller", "research_chip_1"],
+            ],
+        )
+        self.inventories["in"] = BuildingInventory(self, self.slot)
+        self.active_node: ResearchNodeOD | None = None
+        self.work_active_node: ResearchNodeOD | None = None
+        self.working = False
+        self.work_start_time = 0
+        # something about connected laboratories
+
+    def on_energy_awake(self):
+        if not self.working:
+            self.try_to_work()
+
+    def on_inventory_dirty(self):
+        if not self.working:
+            self.try_to_work()
+        self.building.refresh_interact()
+
+    def stop_working(self):
+        self.working = False
+        self.building.change_state("off")
+
+    def try_to_work(self):
+        if not self.building.has_energy:
+            return False
+        if self.active_node is None:
+            return False
+        if self.active_node in god.research.researched_nodes:
+            self.active_node = None
+            return False
+        if self.active_node.required_chip == ItemOD.objects.research_chip_1:
+            if not self.in_inv.has(self.active_node.required_chip, 1):
+                return False
+            self.working = True
+            self.in_inv.remove(self.active_node.required_chip, 1)
+        else:
+            if not self.in_inv.has(ItemOD.objects.remote_controller, 1):
+                return False
+            # actually check other chips from laboratories!
+            # remove said chips from the counter
+        self.working = True
+        self.work_start_time = god.world.get_ticks()
+        self.work_active_node = self.active_node
+        self.building.change_state("on")
+        self.building.refresh_interact()
+        # remember to reduce the time the more laboratories are present, something like that!
+        timerc.add(self.active_node.required_chip.research_time, self.on_finish_work)
+        return True
+
+    def on_finish_work(self):
+        if self.destroyed or self.work_active_node is None:
+            return
+        god.research.advance_research(self.work_active_node)
+        self.work_active_node = None
+        if not self.try_to_work():
+            self.stop_working()
+
+    def on_client_config(self, mail):
+        if mail.missing_fields("active_node_uid"):
+            return
+        if mail.active_node_uid is None:
+            self.active_node = None
+        else:
+            node = ResearchNodeOD.get(mail.active_node_uid)
+            if node not in god.research.get_available_nodes_for_computer([]):
+                return
+            self.active_node = node
+            if not self.working:
+                self.try_to_work()
+        self.building.refresh_interact()
+
+    def get_config(self):
+        return {"active_node_uid": ResearchNodeOD.uid_or_none(self.active_node)}
+
+    def get_client_data(self):
+        data = self.get_inventories_data()
+        data.update(self.get_config())
+        data["available_nodes_uids"] = [
+            node.uid for node in god.research.get_available_nodes_for_computer([])
+        ]
+        data["working"] = self.working
+        data["work_start_time"] = shared.eval_delta(self.work_start_time)
+        return data
+
+    def get_extra_raycast_data(self):
+        # if got chip: "Contains" -> chip
+        # "Remote" -> disabled/enabled
+        # specify what is being researched or whatever
+        # connected laboratories and shy
+        return None
+
+
 class Lamp(BuildingExt, name_id="lamp"):
     def on_energy_awake(self):
         self.building.change_state("on")
@@ -146,9 +246,32 @@ class Hopper(BuildingExt, name_id="hopper"):
         self.inventory = BuildingInventory(self, self.slot)
         self.inventories["in"] = self.inventory
         self.inventories["out"] = self.inventory
+        self.filter: ItemOD | None = None
+
+    def on_client_config(self, mail):
+        if mail.missing_fields("filter_uid"):
+            return
+        if mail.filter_uid is None:
+            self.filter = None
+            self.slot.filter = None
+        else:
+            self.filter = ItemOD.get(mail.filter_uid)
+            self.slot.filter = [
+                constants.INVENTORY_FILTER_WHITELIST,
+                [self.filter.name_id],
+            ]
+        self.building.refresh_interact()
+
+    def get_config(self):
+        return {"filter_uid": ItemOD.uid_or_none(self.filter)}
+
+    def get_client_data(self):
+        data = self.get_inventories_data()
+        data.update(self.get_config())
+        return data
 
     def get_extra_raycast_data(self):
-        return [
+        sections = [
             [
                 "Contains",
                 [
@@ -160,6 +283,84 @@ class Hopper(BuildingExt, name_id="hopper"):
                         self.slot.amount,
                     ]
                 ],
+            ]
+        ]
+        if self.filter is not None:
+            sections.append(["Filter", [["item", self.filter.uid, None]]])
+        return sections
+
+
+class NyliumHarvester(BuildingExt, name_id="nylium_harvester"):
+    def init(self):
+        out_inv = BuildingInventory(self)
+        for i in range(2):
+            out_inv.add_slot(Slot(None, 0, [constants.INVENTORY_FILTER_READONLY], 0))
+        self.inventories["out"] = out_inv
+        self.working = False
+        self.work_start_time = god.world.get_ticks()
+        self.plant_item: ItemOD = ItemOD.objects.nylium_fiber
+        self.plant: VegetationOD = VegetationOD.objects.nylium_grass
+
+    def on_inventory_dirty(self):
+        if not self.working:
+            self.try_to_work()
+        self.building.refresh_interact()
+
+    def on_energy_awake(self):
+        if not self.working:
+            self.try_to_work()
+
+    def stop_working(self):
+        self.working = False
+        self.building.change_state("off")
+
+    def on_finish_work(self):
+        if self.destroyed:
+            return
+        self.out_inv.add(self.plant_item, 1, ignore_filters=True)
+        if not self.try_to_work():
+            self.stop_working()
+
+    def try_to_work(self):
+        if not self.building.has_energy:
+            return False
+        if not self.out_inv.has_space(self.plant_item, 1):
+            return False
+        self.working = True
+        self.work_start_time = god.world.get_ticks()
+        self.building.change_state("on")
+        self.building.refresh_interact()
+        timerc.add(self.plant.harvester_time_s, self.on_finish_work)
+        return True
+
+    def get_client_data(self):
+        data = self.get_inventories_data()
+        data["working"] = self.working
+        data["work_start_time"] = shared.eval_delta(self.work_start_time)
+        return data
+
+    def get_extra_raycast_data(self):
+        slots = [
+            ["text", constants.UI_INFO_DESCR_COL, "(empty)"]
+            if self.out_inv.empty
+            else ["item", self.plant_item.uid, self.out_inv.count(self.plant_item)]
+        ]
+        if not self.out_inv.has_space(self.plant_item, 1):
+            slots.append(["text", constants.RED_BAD, "Full"])
+        if self.working:
+            slots.append(
+                [
+                    "progress",
+                    (god.world.get_ticks() - self.work_start_time)
+                    / 1000
+                    / self.plant.harvester_time_s,
+                    "harvest",
+                ]
+            )
+        return [
+            [
+                "Harvested",
+                slots,
             ]
         ]
 
@@ -245,6 +446,7 @@ class Miner(BuildingExt, name_id="miner"):
         self.work_start_time = god.world.get_ticks()
         self.work_time = tile.miner_time_s
         self.building.change_state("on")
+        self.building.refresh_interact()
         timerc.add(tile.miner_time_s, self.on_finish_work)
         return True
 
@@ -313,7 +515,7 @@ class Crafter(BuildingExt, name_id="crafter"):
         self.building.chunk.refresh()
 
     def get_config(self):
-        return {"recipe_uid": None if self.recipe is None else self.recipe.uid}
+        return {"recipe_uid": ItemOD.uid_or_none(self.recipe)}
 
     def on_inventory_dirty(self):
         if not self.working:
@@ -357,7 +559,7 @@ class Crafter(BuildingExt, name_id="crafter"):
 
     def get_client_data(self):
         data = self.get_inventories_data()
-        data["recipe_uid"] = self.recipe.uid if self.recipe is not None else None
+        data.update(self.get_config())
         data["working"] = self.working
         data["work_start_time"] = shared.eval_delta(self.work_start_time)
         return data

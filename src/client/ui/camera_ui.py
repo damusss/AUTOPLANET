@@ -134,9 +134,7 @@ class CameraUI:
             tex.color = constants.ENERGY_DEBUG_COLOR
             tex.draw(None, rect)
         self.renderer.target = None
-        god.rendering.energy_debug_overlay_texture.draw(
-            None, self.renderer.get_viewport()
-        )
+        god.rendering.energy_debug_overlay_texture.draw(None, god.windowing.viewport)
         for (a, b), has_energy in conns.items():
             self.renderer.draw_color = (
                 constants.ENERGY_DEBUG_COLOR
@@ -282,7 +280,7 @@ class CameraUI:
             color = constants.TRAJECTORY_ERROR_COLOR
         self.renderer.draw_color = color
         self.renderer.draw_line(god.camera.to_screen(a), god.camera.to_screen(b))
-        caret = god.assets.icons_texs["right-caret"]
+        caret = god.assets.icons_texs["right_caret"]
         caret.color = color
         diff = b - a
         angle = math.degrees(math.atan2(diff.x, diff.y))

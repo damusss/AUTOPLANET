@@ -4,6 +4,7 @@
     "path_name": "Better Chip Path",
     "required_chip": 1,
     "require_processor": false,
-    "required_nodes": [],
-    "unlocks": ["research_chip_2", "laboratory"]
+    "required_nodes": ["automation_begins", "connections", "auto_transport", "nylium_farming"],
+    "unlocks": ["research_chip_2", "laboratory"],
+    "cost": 100
 }

@@ -76,6 +76,7 @@ class EnergyPlant(BuildingExt, name_id="energy_plant"):
         self.provider = EnergyProvider(self.building)
         self.building.has_energy = True
         self.building.change_state("on")
+        self.oxygen_plant_count = 0
 
     def can_provide_energy(self):
         return self.building.has_energy
@@ -95,13 +96,25 @@ class EnergyPlant(BuildingExt, name_id="energy_plant"):
             for offset in ((-0.5, -0.5), (-0.5, 0.5), (0.5, -0.5), (0.5, 0.5))
         ]
         self.building.has_energy = False
+        seen_plant_pos = set()
         for oxygen_raycast in oxygen_raycasts:
             if (
                 oxygen_raycast is not None
                 and oxygen_raycast.object_data == VegetationOD.objects.oxygen_plant
             ):
                 self.building.has_energy = True
-                break
+                if oxygen_raycast.tile_pos in seen_plant_pos:
+                    continue
+                seen_plant_pos.add(oxygen_raycast.tile_pos)
+                chunk = god.world.chunks[oxygen_raycast.chunk_key]
+                for veg in chunk.vegetation:
+                    if (
+                        veg[0] == oxygen_raycast.tile_pos[0]
+                        and veg[1] == oxygen_raycast.tile_pos[1]
+                    ):
+                        self.oxygen_plant_count += 1
+                        veg.append(self.building.id)
+
         chunks = god.world.load_or_get_chunks(
             shared.get_chunk_keys_colliding_circle(
                 self.provider.center, self.provider.radius

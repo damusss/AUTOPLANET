@@ -16,7 +16,9 @@ class RaycastInfoUI:
     def render(self, border):
         self.b = border
         raycast = god.player.raycast
-        if god.ui.inventory_open and god.ui.ui_raycast is not None:
+        if god.ui.ui_raycast is not None and (
+            god.ui.inventory_open or god.ui.ui_raycast != constants.UI_RAYCAST_EMPTY
+        ):
             raycast = god.ui.ui_raycast
         col_w = god.windowing.width * constants.UI_RAYCAST_INFO_W_MULT
         cs = col_w * constants.UI_RAYCAST_INFO_CORNER_SIZE_MULT
@@ -109,7 +111,9 @@ class RaycastInfoUI:
         content_w = col_w - b * 2
         title_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
         text = "Unknown Slot Filter"
-        if raycast.filter[0] == constants.INVENTORY_FILTER_CATEGORY:
+        if raycast.filter == constants.INVENTORY_FILTER_SENTINEL_SHORTCUT:
+            text = "Shortcut slot."
+        elif raycast.filter[0] == constants.INVENTORY_FILTER_CATEGORY:
             text = f"Slot Category Whitelist: {', '.join([constants.ITEM_CATEGORY_NAMES[cat] for cat in raycast.filter[1]])}"
         elif raycast.filter[0] == constants.INVENTORY_FILTER_READONLY:
             text = "Slot is read-only."
@@ -308,13 +312,23 @@ class RaycastInfoUI:
     def render_item_amount(self, top, raycast: "UIRaycastHit", col_w, cs, bb, b):
         content_w = col_w - b * 2
         text_h = content_w * constants.UI_RAYCAST_INFO_MSG_H_MULT
+        shortcut = raycast.filter == constants.INVENTORY_FILTER_SENTINEL_SHORTCUT
         text_tex, text_rect = god.assets.font.get_texture_and_rect(
-            f"Inventory: {god.player.count_item(raycast.item)}", "white", text_h
+            f"Inventory: {raycast.amount if shortcut else god.player.count_item(raycast.item)}",
+            "white",
+            text_h,
         )
         text2_tex, text2_rect = god.assets.font.get_texture_and_rect(
-            f"Slot: {raycast.amount}/{raycast.item.stack_size}",
+            (
+                "Left click to clear shortcut."
+                if god.ui.inventory_open
+                else "Left click to hold."
+            )
+            if shortcut
+            else f"Slot: {raycast.amount}/{raycast.item.stack_size}",
             constants.UI_INFO_DESCR_COL,
             text_h,
+            content_w,
         )
         box = pygame.Rect(
             god.windowing.width - bb - col_w,
@@ -344,6 +358,7 @@ class RaycastInfoUI:
         elif (
             god.player.building_available
             == constants.BUILDING_STATUS_MISSING_VEGETATION
+            and god.player.building_preview.vegetation_requirement is not None
         ):
             status = status.replace(
                 "<vegetation>",

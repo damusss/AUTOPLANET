@@ -24,7 +24,7 @@ class FontHandler:
         return wraplength * (self.font.get_height() / text_height)
 
     def get_texture(self, text, color=None, wraplength=0) -> tuple[Texture, int]:
-        key = f"{text}_{self.font.outline}"
+        key = f"{text}_{self.font.outline}_{wraplength}"
         if key not in self.cached_simple_textures:
             surf = self.font.render(
                 str(text), False, "white", wraplength=int(wraplength)
@@ -108,6 +108,7 @@ class Assets:
     def load_ui(self):
         self.energy_tex = self.load_tex("ui/energy.png")
         self.health_tex = self.load_tex("ui/health.png")
+        self.border_overlay = self.load_tex("ui/border_overlay.png")
 
     def load_particles(self):
         self.particle = self.load("particle.png")
@@ -180,7 +181,7 @@ class Assets:
     def load_buildings(self):
         self.buildings: dict[str, pygame.Surface] = {}
         self.building_texs: dict[str, Texture] = {}
-        for building in BuildingOD.get_list():
+        for building in BuildingOD.get_iter():
             try:
                 surf = self.load(f"items/{building.name_id}.png")
                 self.buildings[building.name_id] = surf
@@ -256,6 +257,50 @@ class Assets:
                 self.icons_texs[name] = self.load_tex(surf)
             else:
                 self.icons_texs[name] = self.load_tex(f"icons/{file}")
+
+    """
+    def load_computer_icon(self, microchip, connection):
+        icon = pygame.Surface(
+            (constants.ICON_SVG_SIZE, constants.ICON_SVG_SIZE), pygame.SRCALPHA
+        )
+        offset = int(constants.ICON_SVG_SIZE * 0)
+        mask = pygame.Surface(icon.size, pygame.SRCALPHA)
+        mask.fill("white")
+        sized_microchip, sized_connection = (
+            pygame.transform.smoothscale_by(microchip, 0.5),
+            pygame.transform.smoothscale_by(connection, 0.5),
+        )
+        chip_base = pygame.Surface(icon.size, pygame.SRCALPHA)
+        chip_base.blit(sized_microchip)
+        pygame.draw.polygon(
+            mask,
+            (255, 255, 255, 0),
+            [
+                (0, icon.height - offset),
+                (icon.width, icon.height),
+                (icon.width - offset, 0),
+            ],
+        )
+        chip_base.blit(mask, special_flags=pygame.BLEND_RGBA_MULT)
+        icon.blit(chip_base)
+        mask.fill("white")
+        conn_base = pygame.Surface(icon.size, pygame.SRCALPHA)
+        conn_base.blit(
+            sized_connection,
+            (
+                icon.width - sized_connection.width,
+                icon.height - sized_connection.height,
+            ),
+        )
+        pygame.draw.polygon(
+            mask,
+            (255, 255, 255, 0),
+            [(0, 0), (icon.width, 0 + offset), (0 + offset, icon.height)],
+        )
+        conn_base.blit(mask, special_flags=pygame.BLEND_RGBA_MULT)
+        icon.blit(conn_base)
+        self.icons_texs["microchip_or_connection"] = self.load_tex(icon)
+    """
 
     def load_energy_debug(self):
         plant_r = BuildingOD.objects.energy_plant.energy_radius

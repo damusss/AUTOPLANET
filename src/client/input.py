@@ -34,6 +34,8 @@ class Input:
         if event.type == pygame.MOUSEBUTTONDOWN:
             if god.ui.inventory_open:
                 god.ui.mouse_clicked(event)
+            else:
+                god.ui.mouse_clicked_outside_inventory(event)
             if god.ui.can_interact_world():
                 if (
                     god.player.building_preview is not None
@@ -135,19 +137,30 @@ class Input:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_BACKSLASH:
                 god.rendering.debug = not god.rendering.debug
-            if event.key == pygame.K_F1:
+            elif event.key == pygame.K_F1:
                 god.rendering.energy_debug = not god.rendering.energy_debug
                 self.manual_energy_debug = True
-            if event.key == pygame.K_F2:
+            elif event.key == pygame.K_F2:
                 god.rendering.trajectory_debug = not god.rendering.trajectory_debug
-            if event.key == pygame.K_TAB:
+            elif event.key == pygame.K_p:
                 god.client.conn.mail(constants.MAIL_TOGGLE_PAUSE)
+            elif event.key == pygame.K_z:
+                god.ui.drop_floating_slot()
+            elif (
+                pygame.K_1
+                <= event.key
+                <= pygame.K_1 + (constants.INVENTORY_HOTBAR_SIZE - 1)
+            ):
+                if not god.ui.inventory_open:
+                    god.ui.click_hotbar(event.key - pygame.K_1)
             if event.mod & pygame.KMOD_CTRL:
                 if event.key == pygame.K_c:
                     god.client.conn.mail(constants.MAIL_COPY_CONFIG, reset=False)
                 elif event.key == pygame.K_v:
                     if self.can_paste_config():
                         god.client.conn.mail(constants.MAIL_PASTE_CONFIG)
+                elif event.key == pygame.K_z:
+                    god.ui.drop_floating_slot(True)
         if event.type == pygame.KEYUP:
             if event.key == pygame.K_e:
                 god.ui.toggle_inventory(True)
@@ -164,8 +177,7 @@ class Input:
             if event.key == pygame.K_q:
                 god.player.set_building_preview(None)
                 god.player.set_edit_trajectory(None)
-                if god.ui.inventory_open:
-                    god.ui.inventory.floating_slot.source_slot = None
+                god.ui.inventory.floating_slot.source_slot = None
                 god.client.conn.mail(constants.MAIL_COPY_CONFIG, reset=True)
 
     def can_paste_config(self):
@@ -210,7 +222,7 @@ class Input:
             >= constants.DRAG_PLACE_START_COOLDOWN
         ):
             self.drag_enabled = True
-            if self.mouse_world.distance_squared_to(self.place_pos) > 0.5 * 0.5:
+            if self.mouse_world.distance_squared_to(self.place_pos) > 0.45 * 0.45:
                 self.place_pos = self.mouse_world
                 god.client.conn.mail(
                     constants.MAIL_PLACE_BUILDING,

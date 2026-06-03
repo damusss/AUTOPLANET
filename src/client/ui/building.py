@@ -134,15 +134,25 @@ class BuildingInterface:
             unsubscribe=True,
         )
 
+    def on_exit(self): ...
+    def on_enter(self): ...
+
+
 class ItemSelectionExtension:
-    def __init__(self, parent:"BuildingInterface", items: list[ItemOD], get_config_func, menu_name):
+    def __init__(
+        self,
+        parent: "BuildingInterface",
+        items: list[ItemOD],
+        get_config_func,
+        menu_name,
+    ):
         self.enter_selection_rect = None
         self.items = items
         self.parent = parent
         self.get_config_func = get_config_func
         self.menu_name = menu_name
         self.item_slots = [shared.Slot(item, 1) for item in items]
-        self.back_btn = IconButton("left-arrow", "0.5", 0.9)
+        self.back_btn = IconButton("left_arrow", "0.5", 0.9)
         self.delete_btn = IconButton("delete", "0.5", 0.6)
 
     def render_item_selection(self, cont: pygame.Rect):
@@ -194,17 +204,21 @@ class ItemSelectionExtension:
                 god.client.conn.mail(
                     constants.MAIL_BUILDING_CONFIG,
                     building_id=self.parent.building_data.id,
-                    **self.get_config_func(None)
+                    **self.get_config_func(None),
                 )
             for slot in self.item_slots:
                 if slot.hitbox.collidepoint(event.pos):
                     god.client.conn.mail(
                         constants.MAIL_BUILDING_CONFIG,
                         building_id=self.parent.building_data.id,
-                        **self.get_config_func(slot.item)
+                        **self.get_config_func(slot.item),
                     )
                     god.ui.overlay_menu_func = None
+                    break
         else:
-            if self.enter_selection_rect is None or not self.enter_selection_rect.collidepoint(event.pos):
+            if (
+                self.enter_selection_rect is None
+                or not self.enter_selection_rect.collidepoint(event.pos)
+            ):
                 return
             god.ui.overlay_menu_func = self.render_item_selection

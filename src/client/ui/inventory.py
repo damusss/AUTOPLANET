@@ -263,8 +263,32 @@ class InventoryInterface:
                                         amount=1,
                                     )
                 break
+        if event.button == pygame.BUTTON_LEFT:
+            for slot in god.player.hotbar:
+                if slot.hitbox.collidepoint(event.pos):
+                    if self.floating_slot.source_slot is None:
+                        slot.item = None
+                        slot.amount = 0
+                        god.client.conn.mail(
+                            constants.MAIL_HOTBAR_ACTION, i=slot.i, item_uid=None
+                        )
+                    else:
+                        slot.item = self.floating_slot.source_slot.item
+                        slot.amount = god.player.count_item(slot.item)
+                        self.floating_slot = FloatingSlot(None, 0)
+                        god.client.conn.mail(
+                            constants.MAIL_HOTBAR_ACTION,
+                            i=slot.i,
+                            item_uid=slot.item.uid,
+                        )
+                    break
+
         if not self.cont.collidepoint(event.pos):
-            if self.floating_slot is not None and not self.floating_slot.empty:
+            if (
+                self.floating_slot is not None
+                and not self.floating_slot.empty
+                and self.floating_slot.source_slot is not None
+            ):
                 amount = 0
                 if event.button == pygame.BUTTON_LEFT:
                     amount = self.floating_slot.amount
@@ -314,19 +338,21 @@ class InventoryInterface:
         self.slot_size = slot_size
         slot_i = 0
         hovering_slot = None
+        slots_left = (
+            cont.x
+            + cont.w / 4
+            - (
+                (
+                    slot_size * constants.INVENTORY_COLS
+                    + slot_b * (constants.INVENTORY_COLS - 1)
+                )
+                / 2
+            )
+        )
         for i in range(constants.INVENTORY_ROWS):
             for j in range(constants.INVENTORY_COLS):
                 slot_hitbox = pygame.Rect(
-                    cont.x
-                    + cont.w / 4
-                    - (
-                        (
-                            slot_size * constants.INVENTORY_COLS
-                            + slot_b * (constants.INVENTORY_COLS - 1)
-                        )
-                        / 2
-                    )
-                    + (slot_size + slot_b) * j,
+                    slots_left + (slot_size + slot_b) * j,
                     title_bottom + pad + (slot_size + slot_b) * i,
                     slot_size,
                     slot_size,
@@ -344,6 +370,21 @@ class InventoryInterface:
         hand_hitbox = pygame.Rect(0, 0, slot_size, slot_size).move_to(
             bottomleft=(cont.x + pad, cont.bottom - pad)
         )
+        for i in range(constants.INVENTORY_HOTBAR_SIZE):
+            slot_hitbox = pygame.Rect(
+                slots_left + (slot_size + slot_b) * i,
+                hand_hitbox.top - slot_b - slot_size,
+                slot_size,
+                slot_size,
+            )
+            hovering_slot = self.render_slot(
+                slot_hitbox,
+                god.player.hotbar[i],
+                hovering_slot,
+                "link",
+                storage=False,
+                render_at_zero=True,
+            )
         hovering_slot = self.render_slot(
             hand_hitbox,
             god.player.inventory_slots[constants.INVENTORY_HAND_I],
@@ -370,9 +411,15 @@ class InventoryInterface:
         can_hover=True,
         amount_at_two=False,
         image_percentage=1,
+        render_at_zero=False,
+        ghost_empty_icon=True,
     ):
+        if render_at_zero and slot.item is None:
+            render_at_zero = False
         slot.hitbox = rect
-        hovering = rect.collidepoint(god.user_input.mouse_screen) and render_bg and can_hover
+        hovering = (
+            rect.collidepoint(god.user_input.mouse_screen) and render_bg and can_hover
+        )
         if render_bg:
             render_panel(
                 rect,
@@ -387,10 +434,10 @@ class InventoryInterface:
             img_h = rect.w * constants.UI_SLOT_IMAGE_SIZE_MULT
             img = (
                 god.assets.icons_texs[empty_icon]
-                if slot.empty
+                if (slot.empty and not render_at_zero)
                 else god.assets.item_texs[slot.item.name_id]
             )
-            if slot.empty:
+            if slot.empty and not render_at_zero and ghost_empty_icon:
                 img.alpha = int(constants.UI_PANEL_OUTLINE_ALPHA / 4)
             elif ghost:
                 img.alpha = constants.UI_SLOT_GHOST_ALPHA
@@ -429,11 +476,11 @@ class InventoryInterface:
                     ),
                 )
             if (
-                not slot.empty
+                storage
+                and not slot.empty
                 and slot.item.stack_size > 1
-                and storage
                 and (not amount_at_two or slot.amount > 1)
-            ):  # and not ghost
+            ):
                 amount_h = rect.w * constants.UI_SLOT_AMOUNT_H_MULT
                 amount_tex, amount_rect = god.assets.font.get_texture_and_rect(
                     slot.amount, "white", amount_h
@@ -465,14 +512,13 @@ class InventoryInterface:
                 )
         if hovering:
             return slot
-        else:
-            return hovering_slot
+        return hovering_slot
 
     def render_interface_title(self, title, topleft, width, height_mult=1):
-        title_h = width * constants.UI_INVENTORY_TITLE_H_MULT*height_mult
+        title_h = width * constants.UI_INVENTORY_TITLE_H_MULT * height_mult
         panel_h = title_h * 1.1
         title_tex, title_rect = god.assets.font.get_texture_and_rect(
-            title, "white", title_h
+            title, "white", title_h,
         )
         panel_rect = pygame.Rect(topleft[0], topleft[1], width, panel_h)
         render_panel(panel_rect, panel_h / 2, 2, bg_alpha=constants.OPAQUE)

@@ -16,7 +16,7 @@ class PlayerLike:
     name: str
     pos: pygame.Vector2
     vel: pygame.Vector2
-    texture: Texture|None
+    texture: Texture | None
     light: LightData
     name_texture: Texture
 
@@ -31,8 +31,8 @@ class OtherPlayer(PlayerLike):
         self.vel = pygame.Vector2()
         self.frame_kind = "idle"
         self.frame_index = 0
-        self.texture: Texture|None = None
-        self.building_preview: list|None = None
+        self.texture: Texture | None = None
+        self.building_preview: list | None = None
         self.break_data: tuple[int, tuple[float, float], float] | list | None = None
         self.light = LightData(
             f"other_player_{player_id}",
@@ -65,21 +65,27 @@ class Player(PlayerLike):
         self.jumping = False
         self.energy = constants.PLAYER_MAX_ENERGY
         self.health = constants.PLAYER_MAX_HEALTH
-        self.raycast: shared.RaycastHit|None = None
-        self.config_clipboard: shared.ConfigClipboard|None = None
+        self.raycast: shared.RaycastHit | None = None
+        self.config_clipboard: shared.ConfigClipboard | None = None
         self.edit_trajectory_bot = None
         self.edit_trajectory_kind = "input"
         self.break_start_time = None
+        self.damage_time = -float("inf")
         self.break_mult = 1
         self.building_preview: BuildingOD | None = None
         self.building_available = constants.BUILDING_STATUS_OBSTRUCTED
         self.craft_queue: list[shared.CraftQueueItem] = []
         self.inventory_slots = [
-            shared.Slot(None, 0, None, i, "player")
+            shared.Slot(
+                None, 0, constants.INVENTORY_FILTER_SENTINEL_SHORTCUT, i, "player"
+            )
             for i in range(constants.INVENTORY_COLS * constants.INVENTORY_ROWS + 1)
         ]
         for slot in self.inventory_slots:
             slot.hitbox = pygame.Rect()
+        self.hotbar: list[shared.Slot] = [
+            shared.Slot(None, 0, None, 0)
+        ] * constants.INVENTORY_HOTBAR_SIZE
         self.light = LightData(
             "player",
             constants.PLAYER_LIGHT_RADIUS,
@@ -98,7 +104,7 @@ class Player(PlayerLike):
             constants.PLAYER_HITBOX,
         )
 
-    def set_building_preview(self, preview: BuildingOD|None):
+    def set_building_preview(self, preview: BuildingOD | None):
         if preview is None:
             self.building_preview = None
             if not god.user_input.manual_energy_debug:
@@ -156,7 +162,7 @@ class Player(PlayerLike):
                 count += slot.amount
         return count
 
-    def update_inventory(self, data):
+    def update_inventory(self, data, hotbar):
         for i, (uid, amount, filter_) in enumerate(data):
             prev_amount = self.inventory_slots[i].amount
             self.inventory_slots[i].item = ItemOD.get(uid) if uid is not None else None
@@ -170,6 +176,17 @@ class Player(PlayerLike):
                 god.ui.inventory.floating_slot.amount += amount - prev_amount
                 if god.ui.inventory.floating_slot.amount <= 0:
                     god.ui.inventory.floating_slot.source_slot = None
+        self.hotbar = [
+            shared.Slot(None, 0, constants.INVENTORY_FILTER_SENTINEL_SHORTCUT, i)
+            if shortcut is None
+            else shared.Slot(
+                ItemOD.get(shortcut),
+                self.count_item(ItemOD.get(shortcut)),
+                constants.INVENTORY_FILTER_SENTINEL_SHORTCUT,
+                i,
+            )
+            for i, shortcut in enumerate(hotbar)
+        ]
 
     def frame(self):
         self.pos += self.vel * god.dt

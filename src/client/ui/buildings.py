@@ -3,9 +3,9 @@ import pygame
 from src import shared
 from src import constants
 from src.client import god
-from src.object_data import ItemOD
+from src.object_data import ItemOD, VegetationOD, ResearchNodeOD
+from src.client.ui.panel import render_research_node_card, IconButton
 from src.client.ui.building import BuildingInterface, ItemSelectionExtension
-from src.client.ui.panel import IconButton
 
 
 class StorageInterface(BuildingInterface, name_id="storage"):
@@ -45,26 +45,11 @@ class StorageInterface(BuildingInterface, name_id="storage"):
 
 
 class HopperInterface(BuildingInterface, name_id="hopper"):
-    def render(self, b, cont):
-        self.render_title(cont, b)
-        slot_size = god.ui.inventory.slot_size * 2
-        slot_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(center=cont.center)
-        slot = self.inventories["in"][0]
-        return god.ui.inventory.render_slot(
-            slot_rect,
-            slot,
-            None,
-            None,
-            ghost=god.ui.inventory.floating_slot.source_slot is slot,
-        )
-
-
-class BotInterface(BuildingInterface, name_id="bot"):
     def __init__(self):
         super().__init__()
         self.filter: ItemOD | None = None
         items = sorted(
-            sorted(ItemOD.get_list(), key=lambda item: item.display_name),
+            sorted(ItemOD.get_iter(), key=lambda item: item.display_name),
             key=lambda item: item.category if item.category is not None else "zzz",
         )
         self.item_selection = ItemSelectionExtension(
@@ -73,17 +58,58 @@ class BotInterface(BuildingInterface, name_id="bot"):
 
     def refresh_data(self, base_data, building_data):
         self.refresh_inventories_data(base_data, building_data)
-        self.filter = (
-            None
-            if building_data["filter"] is None
-            else ItemOD.get(building_data["filter"])
-        )
+        self.filter = ItemOD.get_or(building_data["filter_uid"], None)
 
     def mouse_clicked(self, event: pygame.Event):
         self.item_selection.mouse_clicked(event)
 
     def get_config(self, item: ItemOD | None):
-        return {"filter_uid": None if item is None else item.uid}
+        return {"filter_uid": ItemOD.uid_or_none(item)}
+
+    def render(self, b, cont):
+        self.render_title(cont, b)
+        slot_size = god.ui.inventory.slot_size * 2
+        filter_size = god.ui.inventory.slot_size * 1.5
+        slot_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(center=cont.center)
+        filter_rect = pygame.Rect(0, 0, filter_size, filter_size).move_to(
+            center=(cont.centerx, cont.centery - cont.h / 4)
+        )
+        self.item_selection.enter_selection_rect = filter_rect
+        slot = self.inventories["in"][0]
+        hovering = god.ui.inventory.render_slot(
+            slot_rect,
+            slot,
+            None,
+            None,
+            ghost=god.ui.inventory.floating_slot.source_slot is slot,
+        )
+        hovering = god.ui.inventory.render_slot(
+            filter_rect, shared.Slot(self.filter, 1), hovering, "lock", storage=False
+        )
+        return hovering
+
+
+class BotInterface(BuildingInterface, name_id="bot"):
+    def __init__(self):
+        super().__init__()
+        self.filter: ItemOD | None = None
+        items = sorted(
+            sorted(ItemOD.get_iter(), key=lambda item: item.display_name),
+            key=lambda item: item.category if item.category is not None else "zzz",
+        )
+        self.item_selection = ItemSelectionExtension(
+            self, items, self.get_config, "Select Filter"
+        )
+
+    def refresh_data(self, base_data, building_data):
+        self.refresh_inventories_data(base_data, building_data)
+        self.filter = ItemOD.get_or(building_data["filter_uid"], None)
+
+    def mouse_clicked(self, event: pygame.Event):
+        self.item_selection.mouse_clicked(event)
+
+    def get_config(self, item: ItemOD | None):
+        return {"filter_uid": ItemOD.uid_or_none(item)}
 
     def render(self, b, cont):
         self.render_title(cont, b)
@@ -122,6 +148,173 @@ class BotInterface(BuildingInterface, name_id="bot"):
         return hovering
 
 
+class ComputerInterface(BuildingInterface, name_id="computer"):
+    display_recipe = True
+
+    def __init__(self):
+        super().__init__()
+        self.active_node: ResearchNodeOD | None = None
+        self.available_nodes: list[ResearchNodeOD] = []
+        self.working = False
+        self.work_start_time = 0
+        self.research_rect = None
+        self.back_btn = IconButton("left_arrow", "0.5", 0.9)
+        self.delete_btn = IconButton("delete", "0.5", 0.6)
+        self.available_nodes_rects = {}
+
+    def refresh_data(self, base_data, building_data):
+        self.refresh_inventories_data(base_data, building_data)
+        self.active_node = ResearchNodeOD.get_or(building_data["active_node_uid"], None)
+        self.available_nodes = [
+            ResearchNodeOD.get(node_uid)
+            for node_uid in building_data["available_nodes_uids"]
+        ]
+        self.working = building_data["working"]
+        self.work_start_time = shared.eval_delta(building_data["work_start_time"])
+        self.available_nodes_rects = {}
+
+    def render_research_node_selection(self, cont: pygame.Rect):
+        bottom = god.ui.inventory.render_interface_title(
+            "Select an available Research Node", cont.topleft, cont.w, 0.5
+        )
+        pad = cont.w * constants.UI_INVENTORY_PADDING_MULT / 2
+        b = self.b * 1.5
+        available_w = cont.w - pad * 2 - (b * (constants.UI_RESEARCH_CARDS_PER_ROW - 1))
+        card_w = available_w / constants.UI_RESEARCH_CARDS_PER_ROW
+        card_h = card_w * constants.UI_RESEARCH_NODE_CARD_H_MULT
+        if len(self.available_nodes) <= 0:
+            text_tex, text_rect = god.assets.font.get_texture_and_rect(
+                "No research nodes are available.",
+                "white",
+                card_w * constants.UI_RESEARCH_NAME_H_MULT,
+            )
+            text_tex.draw(
+                None, text_rect.move_to(topleft=(cont.left + pad, bottom + pad))
+            )
+        x_idx = y_idx = 0
+        hovering_slot = None
+        for node in self.available_nodes:
+            hitbox = pygame.Rect(
+                cont.left + pad + (card_w + b) * x_idx,
+                bottom + pad + (card_h + b) * y_idx,
+                card_w,
+                card_h,
+            )
+            self.available_nodes_rects[node] = hitbox
+            ret = render_research_node_card(hitbox, node, can_hover=True)
+            if ret:
+                god.ui.cursor = constants.CURSOR_HOVER
+                hovering_slot = ret
+            x_idx += 1
+            if x_idx >= constants.UI_RESEARCH_CARDS_PER_ROW:
+                x_idx = 0
+                y_idx += 1
+        slot_size = god.ui.inventory.slot_size
+        left_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            bottomright=(cont.centerx - b, cont.bottom - b)
+        )
+        right_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            bottomleft=(cont.centerx + b, cont.bottom - b)
+        )
+        self.back_btn.render(left_rect)
+        self.delete_btn.render(right_rect)
+        if hovering_slot and bool(hovering_slot) != hovering_slot:
+            return hovering_slot
+        return None
+
+    def mouse_clicked(self, event: pygame.Event):
+        if event.button != pygame.BUTTON_LEFT:
+            return
+        if god.ui.overlay_menu_func is not None:
+            if self.back_btn.clicked(event):
+                god.ui.overlay_menu_func = None
+            if self.delete_btn.clicked(event):
+                god.ui.overlay_menu_func = None
+                god.client.conn.mail(
+                    constants.MAIL_BUILDING_CONFIG,
+                    building_id=self.building_data.id,
+                    active_node_uid=None,
+                )
+            for node, rect in self.available_nodes_rects.items():
+                if rect.collidepoint(event.pos):
+                    god.client.conn.mail(
+                        constants.MAIL_BUILDING_CONFIG,
+                        building_id=self.building_data.id,
+                        active_node_uid=node.uid,
+                    )
+                    god.ui.overlay_menu_func = None
+                    break
+        else:
+            if self.research_rect is None or not self.research_rect.collidepoint(
+                event.pos
+            ):
+                return
+            god.ui.overlay_menu_func = self.render_research_node_selection
+
+    def on_exit(self):
+        god.client.conn.mail(constants.MAIL_SUBSCRIBE_RESEARCH, unsubscribe=True)
+
+    def on_enter(self):
+        god.client.conn.mail(constants.MAIL_SUBSCRIBE_RESEARCH, unsubscribe=False)
+
+    def render(self, b, cont):
+        self.render_title(cont, b)
+        slot_size = god.ui.inventory.slot_size * 1.5
+        node_w = cont.w / 1.7
+        node_rect = pygame.Rect(
+            0, 0, node_w, node_w * constants.UI_RESEARCH_NODE_CARD_H_MULT
+        ).move_to(center=cont.center)
+        progress = -1
+        if self.active_node is not None:
+            progress = (
+                god.world.research_progress[self.active_node] / self.active_node.cost
+            )
+            if self.working:
+                progress += (
+                    (god.world.get_ticks() - self.work_start_time)
+                    / 1000
+                    / self.active_node.required_chip.research_time
+                    / self.active_node.cost
+                )
+        hovering_slot = render_research_node_card(
+            node_rect,
+            self.active_node,
+            progress=progress,
+            outline_color="white"
+            if self.active_node is None
+            else ("white" if self.working else constants.RED_BAD),
+        )
+        self.research_rect = select_rect = pygame.Rect(
+            0, 0, slot_size, slot_size
+        ).move_to(center=(cont.centerx, cont.centery - cont.h / 4))
+        slot_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            center=(cont.centerx, cont.centery + cont.h / 4)
+        )
+        if (
+            god.ui.inventory.render_slot(
+                select_rect,
+                shared.Slot(None, 0),
+                None,
+                "research",
+                ghost_empty_icon=False,
+            )
+            is not None
+        ):
+            god.ui.cursor = constants.CURSOR_HOVER
+        slot = self.inventories["in"][0]
+        hovering_slot = god.ui.inventory.render_slot(
+            slot_rect,
+            slot,
+            hovering_slot,
+            "microchip" if True else "connection",  # temporary condition
+            ghost=god.ui.inventory.floating_slot.source_slot is slot,
+            storage=(slot.empty or slot.item != ItemOD.objects.remote_controller),
+        )
+        if hovering_slot and bool(hovering_slot) != hovering_slot:
+            return hovering_slot
+        return None
+
+
 class MinerInterface(BuildingInterface, name_id="miner"):
     def __init__(self):
         super().__init__()
@@ -139,10 +332,10 @@ class MinerInterface(BuildingInterface, name_id="miner"):
         self.render_title(cont, b)
         slot_size = god.ui.inventory.slot_size * 2
         slot_rect_1 = pygame.Rect(0, 0, slot_size, slot_size).move_to(
-            midright=(cont.centerx - b, cont.centery)
+            bottomright=(cont.centerx - b, cont.centery)
         )
         slot_rect_2 = pygame.Rect(0, 0, slot_size, slot_size).move_to(
-            midleft=(cont.centerx + b, cont.centery)
+            bottomleft=(cont.centerx + b, cont.centery)
         )
         slot_1 = self.inventories["out"][0]
         slot_2 = self.inventories["out"][1]
@@ -160,6 +353,63 @@ class MinerInterface(BuildingInterface, name_id="miner"):
             hovering,
             None,
             ghost=god.ui.inventory.floating_slot.source_slot is slot_2,
+        )
+        icon = god.assets.icons_texs["drill"]
+        icon_size = god.ui.inventory.slot_size * 2
+        icon_rect = pygame.Rect(0, 0, icon_size, icon_size).move_to(
+            midtop=(cont.centerx, cont.centery + b * 2)
+        )
+        self.render_icon_progress(
+            icon, icon_rect, self.working, self.work_start_time, self.work_time
+        )
+        return hovering
+
+
+class NyliumHarvesterInterface(BuildingInterface, name_id="nylium_harvester"):
+    def __init__(self):
+        super().__init__()
+        self.working = False
+        self.work_start_time = 0
+        self.work_time = VegetationOD.objects.nylium_grass.harvester_time_s
+
+    def refresh_data(self, base_data, building_data):
+        self.refresh_inventories_data(base_data, building_data)
+        self.working = building_data["working"]
+        self.work_start_time = shared.eval_delta(building_data["work_start_time"])
+
+    def render(self, b, cont):
+        self.render_title(cont, b)
+        slot_size = god.ui.inventory.slot_size * 2
+        slot_rect_1 = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            bottomright=(cont.centerx - b, cont.centery)
+        )
+        slot_rect_2 = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            bottomleft=(cont.centerx + b, cont.centery)
+        )
+        slot_1 = self.inventories["out"][0]
+        slot_2 = self.inventories["out"][1]
+        hovering = None
+        hovering = god.ui.inventory.render_slot(
+            slot_rect_1,
+            slot_1,
+            hovering,
+            None,
+            ghost=god.ui.inventory.floating_slot.source_slot is slot_1,
+        )
+        hovering = god.ui.inventory.render_slot(
+            slot_rect_2,
+            slot_2,
+            hovering,
+            None,
+            ghost=god.ui.inventory.floating_slot.source_slot is slot_2,
+        )
+        icon = god.assets.icons_texs["harvest"]
+        icon_size = god.ui.inventory.slot_size * 2
+        icon_rect = pygame.Rect(0, 0, icon_size, icon_size).move_to(
+            midtop=(cont.centerx, cont.centery + b * 2)
+        )
+        self.render_icon_progress(
+            icon, icon_rect, self.working, self.work_start_time, self.work_time
         )
         return hovering
 
@@ -179,7 +429,7 @@ class CrafterInterface(BuildingInterface, name_id="crafter"):
                         item.create_data is not None
                         and item.create_data.type in ["hands", "crafter"]
                     ),
-                    ItemOD.get_list(),
+                    ItemOD.get_iter(),
                 ),
                 key=lambda item: item.display_name,
             ),
@@ -193,17 +443,13 @@ class CrafterInterface(BuildingInterface, name_id="crafter"):
         self.refresh_inventories_data(base_data, building_data)
         self.working = building_data["working"]
         self.work_start_time = shared.eval_delta(building_data["work_start_time"])
-        self.recipe = (
-            ItemOD.get(building_data["recipe_uid"])
-            if building_data["recipe_uid"] is not None
-            else None
-        )
+        self.recipe = ItemOD.get_or(building_data["recipe_uid"], None)
 
     def mouse_clicked(self, event: pygame.Event):
         self.item_selection.mouse_clicked(event)
 
     def get_config(self, item: ItemOD | None):
-        return {"recipe_uid": None if item is None else item.uid}
+        return {"recipe_uid": ItemOD.uid_or_none(item)}
 
     def render(self, b, cont):
         self.render_title(cont, b)
@@ -234,7 +480,12 @@ class CrafterInterface(BuildingInterface, name_id="crafter"):
         )
         self.item_selection.enter_selection_rect = recipe_rect
         hovering = god.ui.inventory.render_slot(
-            recipe_rect, shared.Slot(self.recipe, 1), hovering, "select", storage=False
+            recipe_rect,
+            shared.Slot(self.recipe, 1),
+            hovering,
+            "select",
+            storage=False,
+            ghost_empty_icon=False,
         )
         right = (cont.centerx + cont.w / 4, cont.centery)
         out_slot_size = inv_slot_size * 1.5

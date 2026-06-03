@@ -77,10 +77,11 @@ class Server:
                     name=client.name,
                 )
                 other_players.append((player.client.id, (0, 0), player.client.name))
-            self.world.player_connect(client)
+            new_player = self.world.player_connect(client)
             client.conn.mail(
                 constants.MAIL_CONNECTION_ACCEPTED, other_players=other_players
             )
+            god.world.research.notify_research_info([new_player], True)
             if self.frozen:
                 self.unfreeze()
             shared.log(f"[S] Client connection accepted (ID={client.id})")
@@ -138,6 +139,10 @@ class Server:
                 player.inventory.client_action(
                     mail.action, mail.source, mail.dest, mail.amount
                 )
+        elif mail.compare(constants.MAIL_HOTBAR_ACTION):
+            if mail.client_id in self.world.players:
+                player = self.world.players[mail.client_id]
+                player.client_hotbar_action(mail.i, mail.item_uid)
         elif mail.compare(constants.MAIL_CRAFT_REQUEST):
             if mail.client_id in self.world.players:
                 player = self.world.players[mail.client_id]
@@ -197,6 +202,10 @@ class Server:
             if mail.client_id in self.world.players:
                 player = self.world.players[mail.client_id]
                 self.world.paste_config(player)
+        elif mail.compare(constants.MAIL_SUBSCRIBE_RESEARCH):
+            if mail.client_id in self.world.players:
+                player = self.world.players[mail.client_id]
+                self.world.research.subscribe_player(player, mail.unsubscribe)
 
     def force_disconnect(self, client: ClientInterface, timeout=False):
         self.clients.pop(client.id)

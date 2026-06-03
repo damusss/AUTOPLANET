@@ -8,6 +8,7 @@ from src import shared
 from src import constants
 from src import object_data
 from src.client import god
+from src.object_data import ItemOD, ResearchNodeOD
 from src.client.input import Input
 from src.client.assets import Assets
 from src.client.windowing import Windowing
@@ -94,8 +95,14 @@ class Client:
                     ]
 
         elif mail.compare(constants.MAIL_PLAYER_STATS):
+            prev_health = self.world.player.health
             self.world.player.health = mail.health
-            self.world.player.update_inventory(mail.inventory)
+            self.world.player.update_inventory(mail.inventory, mail.hotbar)
+            if (
+                prev_health - self.world.player.health
+                >= constants.DAMAGE_OVERLAY_SHOW_IF_DAMAGE_ATLEAST
+            ):
+                self.world.player.damage_time = self.world.get_ticks()
         elif mail.compare(constants.MAIL_CHUNK_LOAD):
             self.world.load_chunks(mail.chunks, mail.refresh)
         elif mail.compare(constants.MAIL_CHUNK_UNLOAD):
@@ -129,6 +136,24 @@ class Client:
                 )
             else:
                 self.world.player.config_clipboard = None
+        elif mail.compare(constants.MAIL_UPDATE_RESEARCH):
+            if mail.unlocked_items_uids is not None:
+                self.world.unlocked_items = {
+                    ItemOD.get(uid) for uid in mail.unlocked_items_uids
+                }
+            if mail.researched_nodes_uids is not None:
+                self.world.researched_nodes = {
+                    ResearchNodeOD.get(uid) for uid in mail.researched_nodes_uids
+                }
+            if mail.research_progress is not None:
+                self.world.research_progress = {
+                    ResearchNodeOD.get(int(uid)): progress
+                    for uid, progress in mail.research_progress.items()
+                }
+        elif mail.compare(constants.MAIL_UPDATE_RESEARCH_PROGRESS):
+            self.world.research_progress[ResearchNodeOD.get(mail.node_uid)] = (
+                mail.progress
+            )
 
     def disconnect(self):
         self.mailbox.queue.clear()

@@ -1,12 +1,13 @@
 {
     "size": [2, 2],
     "floor_whitelist": ["copper_platform"],
+    "inventory_kind": "input",
     "states": {
         "on": {
             "default_image": true,
             "light": {
-                "radius": 7,
-                "intensity": 130,
+                "radius": 9,
+                "intensity": 200,
                 "color": "#FFFFFF"
             }
         },
