@@ -52,7 +52,7 @@ class EnergyConn:
         for e in self.endpoints:
             if (
                 e.building.building_od.energy_endpoint_type
-                != constants.ENDPOINT_MACHINE
+                not in [constants.ENDPOINT_MACHINE, constants.ENDPOINT_RESEARCH]
                 and e.building.has_energy
             ):
                 has_energy = True
@@ -131,7 +131,7 @@ class EnergyPlant(BuildingExt, name_id="energy_plant"):
                 if (
                     (
                         building.building_od.energy_endpoint_type
-                        == constants.ENDPOINT_MACHINE
+                        in [constants.ENDPOINT_MACHINE, constants.ENDPOINT_RESEARCH]
                     )
                     and shared.rect_collide_circle(
                         building.hitbox, self.provider.center, self.provider.radius
@@ -194,7 +194,7 @@ class EnergyTransmitter(BuildingExt, name_id="energy_transmitter"):
                 if (
                     (
                         building.building_od.energy_endpoint_type
-                        == constants.ENDPOINT_MACHINE
+                        in [constants.ENDPOINT_MACHINE, constants.ENDPOINT_RESEARCH]
                     )
                     and shared.rect_collide_circle(
                         building.hitbox, self.provider.center, self.provider.radius

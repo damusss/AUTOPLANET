@@ -17,7 +17,7 @@ class RaycastInfoUI:
         self.b = border
         raycast = god.player.raycast
         if god.ui.ui_raycast is not None and (
-            god.ui.inventory_open or god.ui.ui_raycast != constants.UI_RAYCAST_EMPTY
+            god.ui.any_menu_open or god.ui.ui_raycast != constants.UI_RAYCAST_EMPTY
         ):
             raycast = god.ui.ui_raycast
         col_w = god.windowing.width * constants.UI_RAYCAST_INFO_W_MULT

@@ -109,16 +109,24 @@ class Player(PlayerLike):
             self.building_preview = None
             if not god.user_input.manual_energy_debug:
                 god.rendering.energy_debug = False
+            if not god.user_input.manual_computer_debug:
+                god.rendering.computer_debug = False
         else:
             self.building_preview = preview
             self.building_available = constants.BUILDING_STATUS_OBSTRUCTED
             if (
                 self.building_preview.need_energy
                 or self.building_preview.energy_endpoint_type
-                != constants.ENDPOINT_MACHINE
+                not in [constants.ENDPOINT_MACHINE, constants.ENDPOINT_RESEARCH]
             ):
                 god.rendering.energy_debug = True
                 god.user_input.manual_energy_debug = False
+            if (
+                self.building_preview.energy_endpoint_type
+                == constants.ENDPOINT_RESEARCH
+            ):
+                god.rendering.computer_debug = True
+                god.user_input.manual_computer_debug = False
 
     def set_edit_trajectory(self, bid):
         if bid is None:

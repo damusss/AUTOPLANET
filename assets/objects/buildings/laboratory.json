@@ -1,6 +1,7 @@
 {
     "size": [2, 2],
     "inventory_kind": "input",
+    "energy_endpoint_type": "research",
     "states": {
         "on": {
             "default_image": true,

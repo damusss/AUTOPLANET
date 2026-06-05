@@ -39,6 +39,8 @@ class CameraUI:
         self.render_building_warnings()
         if god.rendering.energy_debug:
             self.render_energy_debug()
+        if god.rendering.computer_debug:
+            self.render_computer_debug()
 
     def render_break_anim(self, start_time, center, break_time_s, building_data):
         percent = (god.world.get_ticks() - start_time) / (break_time_s * 1000)
@@ -142,6 +144,40 @@ class CameraUI:
                 else constants.NO_ENERGY_DEBUG_COLOR
             )
             self.renderer.draw_line(god.camera.to_screen(a), god.camera.to_screen(b))
+
+    def render_computer_debug(self):
+        for chunk in god.world.loaded_chunks.values():
+            for bd in chunk.static_buildings:
+                if bd.building_od == BuildingOD.objects.computer:
+                    hitbox = pygame.FRect((0, 0), bd.building_od.size).move_to(
+                        topleft=(bd.topleft_x, bd.topleft_y)
+                    )
+                    self.render_single_computer_debug(hitbox)
+                    for lab_pos in bd.extra:
+                        self.renderer.draw_color = constants.COMPUTER_DEBUG_COLOR
+                        self.renderer.draw_line(
+                            god.camera.to_screen(
+                                hitbox.center
+                                + pygame.Vector2(bd.building_od.debug_attach_offset)
+                            ),
+                            god.camera.to_screen(lab_pos),
+                        )
+
+    def render_single_computer_debug(self, hitbox):
+        white = god.assets.white_tex
+        white.alpha = constants.COMPUTER_DEBUG_ALPHA
+        white.color = constants.COMPUTER_DEBUG_COLOR
+        white.draw(
+            None,
+            god.camera.rect_to_screen(
+                pygame.FRect(
+                    0,
+                    0,
+                    hitbox.width + constants.COMPUTER_SQUARE_RADIUS * 2,
+                    hitbox.height + constants.COMPUTER_SQUARE_RADIUS * 2,
+                ).move_to(center=hitbox.center)
+            ),
+        )
 
     def render_above(self):
         if god.ui.can_interact_world():
@@ -330,7 +366,10 @@ class CameraUI:
             self.renderer.draw_line(
                 god.camera.to_screen(player_pos), god.camera.to_screen(rect.center)
             )
-        if energy_debug and preview.energy_endpoint_type != constants.ENDPOINT_MACHINE:
+        if energy_debug and preview.energy_endpoint_type not in [
+            constants.ENDPOINT_MACHINE,
+            constants.ENDPOINT_RESEARCH,
+        ]:
             debug_tex = (
                 god.assets.energy_plant_debug_tex
                 if preview == BuildingOD.objects.energy_plant
@@ -347,6 +386,8 @@ class CameraUI:
                 ),
             )
             debug_tex.alpha = constants.OPAQUE
+        if preview == BuildingOD.objects.computer:
+            self.render_single_computer_debug(rect)
         tex = god.assets.building_preview_texs[preview.name_id]
         tex.color = color
         tex.alpha = constants.BUILDING_PREVIEW_ALPHA

@@ -1,7 +1,6 @@
 import typing
 
 import pygame
-from docutils.languages import fa
 
 from src import shared
 from src import constants
@@ -14,6 +13,7 @@ from src.client.ui.inventory import FloatingSlot
 from src.client.world.chunk import BuildingDataHolder
 from src.client.ui.crafting import CraftingInterface
 from src.client.ui.building import BuildingInterface
+from src.client.ui.research import ResearchInterface
 from src.client.ui.inventory import InventoryInterface
 
 if constants.NEW_RENDER:
@@ -45,10 +45,12 @@ class ScreenUI:
         self.ui_raycast = None
         self.inventory_open = False
         self.open_interface = None
+        self.research_open = False
         self.renderer = renderer
         self.b = 0
         self.raycast_info = RaycastInfoUI()
         self.inventory = InventoryInterface()
+        self.research = ResearchInterface()
         self.crafting_interface = CraftingInterface()
         self.cursor = constants.CURSOR_IDLE_WORLD
         self.hotbar_rect = pygame.Rect()
@@ -59,6 +61,10 @@ class ScreenUI:
             BuildingInterface.get_interfaces()
         )
         assert buildings
+
+    @property
+    def any_menu_open(self):
+        return self.inventory_open or self.research_open
 
     def refresh_screen_textures(self):
         pause_surf = pygame.Surface(god.windowing.size, pygame.SRCALPHA)
@@ -123,7 +129,7 @@ class ScreenUI:
 
     def can_interact_world(self):
         hovering_hotbar = self.hotbar_rect.collidepoint(god.user_input.mouse_screen)
-        if self.inventory_open:
+        if self.any_menu_open:
             return self.ui_raycast is None
         return not hovering_hotbar
 
@@ -146,8 +152,26 @@ class ScreenUI:
             amount=self.inventory.floating_slot.amount if whole_stack else 1,
         )
 
+    def close_any_menu(self):
+        if self.inventory_open:
+            self.toggle_inventory()
+        if self.research_open:
+            self.toggle_research()
+
+    def toggle_research(self):
+        if not self.research_open:
+            self.close_any_menu()
+            god.player.set_building_preview(None)
+            god.player.set_edit_trajectory(None)
+            self.research.subscribe()
+        else:
+            self.research.unsubscribe()
+            self.research.reset_camera()
+        self.research_open = not self.research_open
+
     def toggle_inventory(self, manual=False):
         if not self.inventory_open:
+            self.close_any_menu()
             self.open_interface = self.crafting_interface
             god.player.set_building_preview(None)
             god.player.set_edit_trajectory(None)
@@ -173,8 +197,7 @@ class ScreenUI:
             base_data, building_data.get("building_id", None)
         )
         if not self.inventory_open:
-            self.inventory_open = True
-            god.player.set_building_preview(None)
+            self.toggle_inventory()
         old_interface = self.open_interface
         self.open_interface = self.building_interfaces[data_holder.building_od]
         if old_interface != self.open_interface and old_interface:
@@ -429,13 +452,13 @@ class ScreenUI:
                 slot,
                 hovering_slot,
                 "link",
-                can_hover=not self.inventory_open,
+                can_hover=not self.any_menu_open,
                 render_at_zero=True,
             )
             if hovering_slot is not None:
                 self.cursor = constants.CURSOR_HOVER
         if (
-            not self.inventory_open
+            not self.any_menu_open
             and self.cursor != constants.CURSOR_HOVER
             and self.hotbar_rect.collidepoint(god.user_input.mouse_screen)
         ):
@@ -472,6 +495,8 @@ class ScreenUI:
         )
 
     def render(self):
+        hovering_slot = None
+        crafting_slot = False
         self.cursor = constants.CURSOR_IDLE_WORLD
         self.b = god.windowing.width * (constants.UI_BORDER_PERCENT / 100)
         if god.player.edit_trajectory_bot is not None:
@@ -482,12 +507,13 @@ class ScreenUI:
         self.render_debug_indicators(right)
         self.render_craft_queue()
         hotbar_hovered_slot = self.render_hotbar()
+        if hotbar_hovered_slot:
+            hovering_slot = hotbar_hovered_slot
         prev_ray = self.ui_raycast
         self.ui_raycast = None
         cont = pygame.Rect()
         if self.inventory_open:
             cont, hovering_slot = self.inventory.render(self.b)
-            crafting_slot = False
             if cont.collidepoint(god.user_input.mouse_screen):
                 self.ui_raycast = constants.UI_RAYCAST_EMPTY
                 self.cursor = constants.CURSOR_IDLE_UI
@@ -509,46 +535,41 @@ class ScreenUI:
                     self.cursor = constants.CURSOR_HOVER
                     if self.open_interface.display_recipe:
                         crafting_slot = True
-            if hovering_slot is not None:
-                if hovering_slot.empty:
-                    if hovering_slot.filter:
-                        self.ui_raycast = UIRaycastHit(
-                            None,
-                            False,
-                            0,
-                            constants.RAYCAST_UI_SLOT_FILTER,
-                            hovering_slot.filter,
-                        )
-                else:
-                    self.ui_raycast = UIRaycastHit(
-                        hovering_slot.item,
-                        crafting_slot,
-                        hovering_slot.amount,
-                        constants.RAYCAST_UI_ITEM,
-                        hovering_slot.filter,
-                    )
             if self.inventory.left_panning or self.inventory.right_panning:
                 self.cursor = constants.CURSOR_HOVER
-        else:
-            if hotbar_hovered_slot is not None:
-                if hotbar_hovered_slot.item is None:
+        elif self.research_open:
+            crafting_slot = True
+            cont, hovering_slot = self.research.render(self.b)
+            if (
+                cont.collidepoint(god.user_input.mouse_screen)
+                or god.user_input.research_dragging
+            ):
+                self.ui_raycast = constants.UI_RAYCAST_EMPTY
+                self.cursor = constants.CURSOR_HOVER
+        if hovering_slot is not None:
+            if hovering_slot.empty and (
+                hotbar_hovered_slot is None or hotbar_hovered_slot.item is None
+            ):
+                if hovering_slot.filter:
                     self.ui_raycast = UIRaycastHit(
                         None,
                         False,
                         0,
                         constants.RAYCAST_UI_SLOT_FILTER,
-                        hotbar_hovered_slot.filter,
+                        hovering_slot.filter,
                     )
-                else:
-                    self.ui_raycast = UIRaycastHit(
-                        hotbar_hovered_slot.item,
-                        False,
-                        hotbar_hovered_slot.amount,
-                        constants.RAYCAST_UI_ITEM,
-                        hotbar_hovered_slot.filter,
-                    )
-        if self.ui_raycast != prev_ray and not cont.collidepoint(
-            god.user_input.mouse_screen
+            else:
+                self.ui_raycast = UIRaycastHit(
+                    hovering_slot.item,
+                    crafting_slot,
+                    hovering_slot.amount,
+                    constants.RAYCAST_UI_ITEM,
+                    hovering_slot.filter,
+                )
+        if (
+            self.ui_raycast != prev_ray
+            and not cont.collidepoint(god.user_input.mouse_screen)
+            and not god.user_input.research_dragging
         ):
             pygame.event.post(
                 pygame.Event(

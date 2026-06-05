@@ -4,7 +4,7 @@ from src import shared
 from src import constants
 from src.client import god
 from src.object_data import ItemOD, VegetationOD, ResearchNodeOD
-from src.client.ui.panel import render_research_node_card, IconButton
+from src.client.ui.panel import IconButton
 from src.client.ui.building import BuildingInterface, ItemSelectionExtension
 
 
@@ -148,6 +148,68 @@ class BotInterface(BuildingInterface, name_id="bot"):
         return hovering
 
 
+class LaboratoryInterface(BuildingInterface, name_id="laboratory"):
+    display_recipe = True
+
+    def __init__(self):
+        super().__init__()
+        self.working = False
+        self.work_start_time = 0
+        self.contribute_node: ResearchNodeOD | None = None
+
+    def refresh_data(self, base_data, building_data):
+        self.refresh_inventories_data(base_data, building_data)
+        self.working = building_data["working"]
+        self.work_start_time = shared.eval_delta(building_data["work_start_time"])
+        self.contribute_node = ResearchNodeOD.get_or(
+            building_data["contribute_node_uid"], None
+        )
+
+    def render(self, b, cont):
+        self.render_title(cont, b)
+        slot_size = god.ui.inventory.slot_size * 2
+        slot_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            midbottom=cont.center
+        )
+        slot = self.inventories["in"][0]
+        hovering = god.ui.inventory.render_slot(
+            slot_rect,
+            slot,
+            None,
+            "microchip",
+            ghost=god.ui.inventory.floating_slot.source_slot is slot,
+        )
+        icon = god.assets.icons_texs["research"]
+        icon_size = god.ui.inventory.slot_size * 2
+        icon_rect = pygame.Rect(0, 0, icon_size, icon_size).move_to(
+            midtop=(cont.centerx, cont.centery + b * 2)
+        )
+        self.render_icon_progress(
+            icon,
+            icon_rect,
+            self.working,
+            self.work_start_time,
+            self.contribute_node.required_chip.research_time
+            if self.contribute_node is not None
+            else 0,
+        )
+        if self.contribute_node is not None:
+            contr_h = cont.w * constants.UI_INVENTORY_TEXT_H_MULT
+            contr_tex, contr_rect = god.assets.font.get_texture_and_rect(
+                f"Contributing Research: {self.contribute_node.display_name}",
+                "white",
+                contr_h,
+                cont.width - b * 2,
+            )
+            contr_tex.draw(
+                None,
+                contr_rect.move_to(
+                    center=(cont.centerx, cont.centery + cont.height / 4)
+                ),
+            )
+        return hovering
+
+
 class ComputerInterface(BuildingInterface, name_id="computer"):
     display_recipe = True
 
@@ -157,6 +219,7 @@ class ComputerInterface(BuildingInterface, name_id="computer"):
         self.available_nodes: list[ResearchNodeOD] = []
         self.working = False
         self.work_start_time = 0
+        self.work_advance_amount = 1
         self.research_rect = None
         self.back_btn = IconButton("left_arrow", "0.5", 0.9)
         self.delete_btn = IconButton("delete", "0.5", 0.6)
@@ -171,6 +234,7 @@ class ComputerInterface(BuildingInterface, name_id="computer"):
         ]
         self.working = building_data["working"]
         self.work_start_time = shared.eval_delta(building_data["work_start_time"])
+        self.work_advance_amount = building_data["work_advance_amount"]
         self.available_nodes_rects = {}
 
     def render_research_node_selection(self, cont: pygame.Rect):
@@ -181,7 +245,7 @@ class ComputerInterface(BuildingInterface, name_id="computer"):
         b = self.b * 1.5
         available_w = cont.w - pad * 2 - (b * (constants.UI_RESEARCH_CARDS_PER_ROW - 1))
         card_w = available_w / constants.UI_RESEARCH_CARDS_PER_ROW
-        card_h = card_w * constants.UI_RESEARCH_NODE_CARD_H_MULT
+        card_h = card_w * constants.UI_RESEARCH_CARD_H_MULT
         if len(self.available_nodes) <= 0:
             text_tex, text_rect = god.assets.font.get_texture_and_rect(
                 "No research nodes are available.",
@@ -201,7 +265,9 @@ class ComputerInterface(BuildingInterface, name_id="computer"):
                 card_h,
             )
             self.available_nodes_rects[node] = hitbox
-            ret = render_research_node_card(hitbox, node, can_hover=True)
+            ret = god.ui.research.render_research_node_card(
+                hitbox, node, can_hover=True
+            )
             if ret:
                 god.ui.cursor = constants.CURSOR_HOVER
                 hovering_slot = ret
@@ -252,17 +318,17 @@ class ComputerInterface(BuildingInterface, name_id="computer"):
             god.ui.overlay_menu_func = self.render_research_node_selection
 
     def on_exit(self):
-        god.client.conn.mail(constants.MAIL_SUBSCRIBE_RESEARCH, unsubscribe=True)
+        god.ui.research.unsubscribe()
 
     def on_enter(self):
-        god.client.conn.mail(constants.MAIL_SUBSCRIBE_RESEARCH, unsubscribe=False)
+        god.ui.research.subscribe()
 
     def render(self, b, cont):
         self.render_title(cont, b)
         slot_size = god.ui.inventory.slot_size * 1.5
         node_w = cont.w / 1.7
         node_rect = pygame.Rect(
-            0, 0, node_w, node_w * constants.UI_RESEARCH_NODE_CARD_H_MULT
+            0, 0, node_w, node_w * constants.UI_RESEARCH_CARD_H_MULT
         ).move_to(center=cont.center)
         progress = -1
         if self.active_node is not None:
@@ -275,8 +341,8 @@ class ComputerInterface(BuildingInterface, name_id="computer"):
                     / 1000
                     / self.active_node.required_chip.research_time
                     / self.active_node.cost
-                )
-        hovering_slot = render_research_node_card(
+                ) * self.work_advance_amount
+        hovering_slot = god.ui.research.render_research_node_card(
             node_rect,
             self.active_node,
             progress=progress,
@@ -306,10 +372,31 @@ class ComputerInterface(BuildingInterface, name_id="computer"):
             slot_rect,
             slot,
             hovering_slot,
-            "microchip" if True else "connection",  # temporary condition
+            None
+            if self.active_node is None
+            else (
+                "microchip"
+                if self.active_node.required_chip == ItemOD.objects.research_chip_1
+                else "connection"
+            ),
             ghost=god.ui.inventory.floating_slot.source_slot is slot,
             storage=(slot.empty or slot.item != ItemOD.objects.remote_controller),
         )
+        if (
+            self.active_node is not None
+            and self.active_node.required_chip != ItemOD.objects.research_chip_1
+            and (slot.amount <= 0 or slot.item != ItemOD.objects.remote_controller)
+        ):
+            err_h = cont.w * constants.UI_INVENTORY_TEXT_H_MULT
+            err_tex, err_rect = god.assets.font.get_texture_and_rect(
+                "One remote controller is required.",
+                constants.RED_BAD,
+                err_h,
+                cont.width - b * 2,
+            )
+            err_tex.draw(
+                None, err_rect.move_to(midbottom=(cont.centerx, cont.bottom - b))
+            )
         if hovering_slot and bool(hovering_slot) != hovering_slot:
             return hovering_slot
         return None

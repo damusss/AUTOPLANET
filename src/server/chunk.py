@@ -11,6 +11,7 @@ from src.object_data import Star, Dust, BigStar, BlackHole, VegetationOD
 from src.server.drop import Drop
 from src.server.energy import EnergyProvider
 from src.server.building import Building, MovingBuilding
+from src.server.buildings import Computer
 
 
 class Chunk:
@@ -23,6 +24,7 @@ class Chunk:
         )
         self.refresh_pending = False
         self.energy_providers: set[EnergyProvider] = set()
+        self.computers: set[Computer] = set()
         self.moving_building_ids = set()
         self.building_ids = set()
         self.building_floor_hitboxes: list[pygame.FRect] = []

@@ -12,6 +12,30 @@ else:
     from pygame._sdl2 import Texture
 
 
+class SpecialLaboratoryRenderer(SpecialBuildingRenderer, name_id="laboratory"):
+    chip_topleft_offset_mult = (13 / 32, 12 / 32)
+    chip_size_mult = 6 / 32
+
+    def render(self, renderer):
+        hitbox = pygame.FRect((0, 0), self.data.building_od.size).move_to(
+            topleft=(self.data.topleft_x, self.data.topleft_y)
+        )
+        chip_od = ItemOD.get(self.data.extra["chip_uid"])
+        chip_tex = god.assets.item_texs[chip_od.name_id]
+        chip_size = hitbox.width * self.chip_size_mult
+        chip_tex.draw(
+            None,
+            god.camera.rect_to_screen(
+                pygame.FRect(0, 0, chip_size, chip_size).move_to(
+                    topleft=(
+                        hitbox.left + hitbox.width * self.chip_topleft_offset_mult[0],
+                        hitbox.top + hitbox.height * self.chip_topleft_offset_mult[1],
+                    )
+                )
+            ),
+        )
+
+
 class SpecialCrafterRenderer(SpecialBuildingRenderer, name_id="crafter"):
     recipe_offset_mult = 28.5 / 32
     recipe_size_mult = 6 / 32

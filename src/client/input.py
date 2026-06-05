@@ -13,17 +13,24 @@ class Input:
         self.mouse_screen = pygame.Vector2()
         self.mouse_world = pygame.Vector2()
         self.manual_energy_debug = False
+        self.manual_computer_debug = False
         self.place_time = 0
         self.place_pos = None
         self.drag_enabled = False
+        self.research_dragging = False
         # temp connect to server
         pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_m, mod=0))
 
     def event(self, event: pygame.Event):
         if event.type == pygame.MOUSEWHEEL:
-            god.world.camera.zoom_event(event.y)
+            if god.ui.can_interact_world():
+                god.world.camera.zoom_event(event.y)
+            elif god.ui.research_open:
+                god.ui.research.zoom_event(event.y, pygame.mouse.get_pos())
         if event.type == pygame.MOUSEBUTTONUP:
             self.drag_enabled = False
+            if event.button not in [pygame.BUTTON_WHEELUP, pygame.BUTTON_WHEELDOWN]:
+                self.research_dragging = False
             if event.button == pygame.BUTTON_RIGHT:
                 god.ui.inventory.end_right_pan()
             elif event.button == pygame.BUTTON_LEFT:
@@ -34,7 +41,13 @@ class Input:
         if event.type == pygame.MOUSEBUTTONDOWN:
             if god.ui.inventory_open:
                 god.ui.mouse_clicked(event)
-            else:
+            elif god.ui.research_open:
+                if event.button in [
+                    pygame.BUTTON_LEFT,
+                    pygame.BUTTON_MIDDLE,
+                ] and god.ui.research.view_rect.collidepoint(event.pos):
+                    self.research_dragging = True
+            elif not god.ui.any_menu_open:
                 god.ui.mouse_clicked_outside_inventory(event)
             if god.ui.can_interact_world():
                 if (
@@ -87,7 +100,7 @@ class Input:
 
                 elif (
                     event.button == pygame.BUTTON_MIDDLE
-                    and not god.ui.inventory_open
+                    and not god.ui.any_menu_open
                     and god.player.raycast is not None
                     and god.player.raycast.type == constants.RAYCAST_BUILDING
                     and god.player.raycast.object_data == BuildingOD.objects.bot
@@ -105,7 +118,7 @@ class Input:
                         god.player.set_edit_trajectory(god.player.raycast.data[0])
                 elif (
                     event.button == pygame.BUTTON_MIDDLE
-                    and not god.ui.inventory_open
+                    and not god.ui.any_menu_open
                     and god.player.raycast is not None
                     and god.player.raycast.type == constants.RAYCAST_BUILDING
                     and god.player.raycast.object_data != BuildingOD.objects.bot
@@ -114,7 +127,7 @@ class Input:
                         god.player.set_building_preview(god.player.raycast.object_data)
                 elif (
                     event.button == pygame.BUTTON_MIDDLE
-                    and not god.ui.inventory_open
+                    and not god.ui.any_menu_open
                     and god.player.edit_trajectory_bot is not None
                 ):
                     if (
@@ -132,8 +145,6 @@ class Input:
                         input_type=event.type,
                         button=event.button,
                     )
-        # if event.type in [pygame.KEYDOWN, pygame.KEYUP]:
-        #    god.client.conn.mail(constants.MAIL_INPUT_EVENT, input_type=event.type, button=None)
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_BACKSLASH:
                 god.rendering.debug = not god.rendering.debug
@@ -142,6 +153,9 @@ class Input:
                 self.manual_energy_debug = True
             elif event.key == pygame.K_F2:
                 god.rendering.trajectory_debug = not god.rendering.trajectory_debug
+            elif event.key == pygame.K_F3:
+                god.rendering.computer_debug = not god.rendering.computer_debug
+                self.manual_computer_debug = True
             elif event.key == pygame.K_p:
                 god.client.conn.mail(constants.MAIL_TOGGLE_PAUSE)
             elif event.key == pygame.K_z:
@@ -151,8 +165,30 @@ class Input:
                 <= event.key
                 <= pygame.K_1 + (constants.INVENTORY_HOTBAR_SIZE - 1)
             ):
-                if not god.ui.inventory_open:
+                if not god.ui.any_menu_open:
                     god.ui.click_hotbar(event.key - pygame.K_1)
+            elif event.key == pygame.K_e:
+                god.ui.toggle_inventory(True)
+            elif event.key == pygame.K_TAB:
+                god.ui.toggle_research()
+            elif event.key == pygame.K_c:
+                if not (event.mod & pygame.KMOD_CTRL) and god.ui.research_open:
+                    god.ui.research.reset_camera()
+            elif event.key == pygame.K_ESCAPE:
+                if god.ui.inventory_open and god.ui.overlay_menu_func is not None:
+                    god.ui.overlay_menu_func = None
+                else:
+                    god.player.set_building_preview(None)
+                    god.player.set_edit_trajectory(None)
+                    god.rendering.energy_debug = False
+                    god.rendering.trajectory_debug = False
+                    god.rendering.computer_debug = False
+                    god.ui.close_any_menu()
+            elif event.key == pygame.K_q:
+                god.player.set_building_preview(None)
+                god.player.set_edit_trajectory(None)
+                god.ui.inventory.floating_slot.source_slot = None
+                god.client.conn.mail(constants.MAIL_COPY_CONFIG, reset=True)
             if event.mod & pygame.KMOD_CTRL:
                 if event.key == pygame.K_c:
                     god.client.conn.mail(constants.MAIL_COPY_CONFIG, reset=False)
@@ -161,24 +197,6 @@ class Input:
                         god.client.conn.mail(constants.MAIL_PASTE_CONFIG)
                 elif event.key == pygame.K_z:
                     god.ui.drop_floating_slot(True)
-        if event.type == pygame.KEYUP:
-            if event.key == pygame.K_e:
-                god.ui.toggle_inventory(True)
-            if event.key == pygame.K_ESCAPE:
-                if god.ui.inventory_open and god.ui.overlay_menu_func is not None:
-                    god.ui.overlay_menu_func = None
-                else:
-                    god.player.set_building_preview(None)
-                    god.player.set_edit_trajectory(None)
-                    god.rendering.energy_debug = False
-                    god.rendering.trajectory_debug = False
-                    if god.ui.inventory_open:
-                        god.ui.toggle_inventory()
-            if event.key == pygame.K_q:
-                god.player.set_building_preview(None)
-                god.player.set_edit_trajectory(None)
-                god.ui.inventory.floating_slot.source_slot = None
-                god.client.conn.mail(constants.MAIL_COPY_CONFIG, reset=True)
 
     def can_paste_config(self):
         return (
@@ -191,7 +209,9 @@ class Input:
         )
 
     def frame(self):
+        prev_screen = self.mouse_screen
         self.mouse_screen = pygame.Vector2(pygame.mouse.get_pos())
+        screen_delta = self.mouse_screen - prev_screen
         mouse_world = pygame.Vector2(self.mouse_world)
         self.mouse_world = god.camera.from_screen(self.mouse_screen)
         input_dir = pygame.Vector2()
@@ -214,6 +234,10 @@ class Input:
             god.client.conn.mail(constants.MAIL_INPUT_DIR, dir=tuple(input_dir))
         if mouse_world != self.mouse_world:
             god.client.conn.mail(constants.MAIL_MOUSE_POS, pos=tuple(self.mouse_world))
+        if self.research_dragging:
+            if not god.ui.research_open:
+                self.research_dragging = False
+            god.ui.research.drag(screen_delta)
         if (
             mouse_pressed[0]
             and self.place_pos is not None

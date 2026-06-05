@@ -38,6 +38,7 @@ class InventoryInterface:
         self.left_pan_item = None
         self.pan_source = None
         self.slot_taken_time = 0
+        self.b = 0
 
     def start_right_pan(self, slot: shared.Slot):
         self.right_panning = True
@@ -518,7 +519,9 @@ class InventoryInterface:
         title_h = width * constants.UI_INVENTORY_TITLE_H_MULT * height_mult
         panel_h = title_h * 1.1
         title_tex, title_rect = god.assets.font.get_texture_and_rect(
-            title, "white", title_h,
+            title,
+            "white",
+            title_h,
         )
         panel_rect = pygame.Rect(topleft[0], topleft[1], width, panel_h)
         render_panel(panel_rect, panel_h / 2, 2, bg_alpha=constants.OPAQUE)

@@ -6,5 +6,6 @@
         "time_s": 1,
         "recipe": [["nylium_fiber", 1]]
     },
+    "category": "research_chips",
     "research_time": 20
 }

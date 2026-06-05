@@ -76,6 +76,7 @@ class Player:
             constants.PLAYER_MAX_HEALTH,
         )
         self.stats_dirty = True
+        self.last_regen = god.world.get_ticks()
 
     def add_to_craft_queue(self, item, amount, phantom):
         for craft_item in self.craft_queue:
@@ -192,7 +193,6 @@ class Player:
                 god.world.get_ticks() - self.last_regen
                 >= constants.PLAYER_HEALTH_REGEN_COOLDOWN
             ):
-                self.last_regen = god.world.get_ticks()
                 self.damage(-constants.PLAYER_HEALTH_REGEN_AMOUNT)
 
         self.handle_mouse_input()
@@ -202,9 +202,7 @@ class Player:
         if self.inventory.dirty or self.stats_dirty:
             self.mail_stats()
 
-    def drops_collisions(
-        self, drops: list[Drop], update: bool, drops_data: list
-    ):
+    def drops_collisions(self, drops: list[Drop], update: bool, drops_data: list):
         hitbox = self.hitbox
         for drop in list(drops):
             if drop.hitbox.colliderect(hitbox):

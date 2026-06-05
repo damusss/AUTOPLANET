@@ -11,16 +11,25 @@ class Research:
         self.researched_nodes: set[ResearchNodeOD] = set()
         self.unlocked_items: set[ItemOD] = object_data.ITEMS_STARTER_PACK.copy()
         self.research_progress: dict = dict.fromkeys(ResearchNodeOD.get_iter(), 0)
+        self.future_research_progress: dict = self.research_progress.copy()
         self.subscribed_client_players: set[Player] = set()
 
-    def advance_research(self, node: ResearchNodeOD):
+    def future_advance_research(self, node: ResearchNodeOD, amount: int):
         if node in self.researched_nodes:
             return
-        self.research_progress[node] += 1
+        self.future_research_progress[node] += amount
+
+    def advance_research(self, node: ResearchNodeOD, amount: int):
+        if node in self.researched_nodes:
+            return
+        self.research_progress[node] += amount
         if self.research_progress[node] >= node.cost:
+            self.research_progress[node] = node.cost
+            self.future_research_progress[node] = node.cost
             self.researched_nodes.add(node)
             for item in node.unlocks:
                 self.unlocked_items.add(item)
+            self.notify_research_progress(node)
             self.notify_research_info()
         else:
             self.notify_research_progress(node)
@@ -65,13 +74,11 @@ class Research:
                 progress=self.research_progress[node],
             )
 
-    def get_available_nodes_for_computer(self, chips_available: list[ItemOD]):
+    def get_available_nodes_for_computer(self):
         available = []
-        chip_1 = ItemOD.objects.research_chip_1
         for node in ResearchNodeOD.get_iter():
             if (
-                (node.required_chip == chip_1 or node.required_chip in chips_available)
-                and all((req in self.researched_nodes for req in node.required_nodes))
+                all((req in self.researched_nodes for req in node.required_nodes))
                 and node not in self.researched_nodes
             ):
                 available.append(node)

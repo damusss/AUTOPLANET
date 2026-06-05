@@ -6,9 +6,9 @@
         "type": "hands",
         "time_s": 3,
         "recipe": [
-            ["microchip", 1],
+            ["microchip", 3],
             ["copper_pipe", 8],
-            ["antennas", 1]
+            ["antennas", 4]
         ]
     }
 }

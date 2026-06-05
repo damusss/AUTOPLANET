@@ -83,7 +83,7 @@ class BuildingDataHolder:
         return self.data[5]
 
     @property
-    def extra(self) -> dict | None:
+    def extra(self) -> dict | list | None:
         return self.data[6] if len(self.data) >= 7 else None
 
 
@@ -313,7 +313,11 @@ class Chunk:
             rel_x = bdata.topleft_x - self.world_topleft.x + padding
             rel_y = bdata.topleft_y - self.world_topleft.y + padding
             surface.blit(image, (rel_x * constants.TILE_PX, rel_y * constants.TILE_PX))
-            if bdata.extra is not None:
+            if (
+                bdata.extra is not None
+                and bdata.building_od.name_id
+                in SpecialBuildingRenderer.REGISTERED_RENDERERS
+            ):
                 self.special_building_renderers.append(
                     SpecialBuildingRenderer.get_renderer(bdata.building_od.name_id)(
                         bdata

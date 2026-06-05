@@ -132,7 +132,8 @@ class Inventory(CommonInventory):
         self.add(ItemOD.objects.computer, 2)
         self.add(ItemOD.objects.laboratory, 20)
         self.add(ItemOD.objects.remote_controller, 10)
-        self.add(ItemOD.objects.research_chip_1, 200)
+        self.add(ItemOD.objects.research_chip_1, 500)
+        self.add(ItemOD.objects.research_chip_2, 500)
 
     def set_dirty(self):
         self.dirty = True
