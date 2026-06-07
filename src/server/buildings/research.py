@@ -34,6 +34,14 @@ class Laboratory(BuildingExt, name_id="laboratory"):
             and self.in_inv.has(computer.active_node.required_chip, 1)
         )
 
+    def is_busy(self, computer: "Computer"):
+        return self.working and not self.working_for is computer
+
+    def missing_resources(self, computer: "Computer"):
+        return not self.building.has_energy or not self.in_inv.has(
+            computer.active_node.required_chip, 1
+        )
+
     def start_working_for_computer(self, computer: "Computer"):
         self.working = True
         self.work_start_time = god.world.get_ticks()
@@ -89,7 +97,38 @@ class Laboratory(BuildingExt, name_id="laboratory"):
         return None if self.in_inv.empty else {"chip_uid": self.slot.item.uid}
 
     def get_extra_raycast_data(self):
-        return None  # obv need more
+        sections = [
+            [
+                "Contains",
+                [
+                    ["text", constants.UI_INFO_DESCR_COL, "(empty)"]
+                    if self.in_inv.empty
+                    else ["item", self.slot.item.uid, self.slot.amount]
+                ],
+            ]
+        ]
+        if self.working:
+            node = self.working_for.work_active_node
+            sections.append(
+                [
+                    "Research",
+                    [
+                        [
+                            "research",
+                            node.uid,
+                            god.research.research_progress[node] / node.cost,
+                        ],
+                        [
+                            "progress",
+                            (god.world.get_ticks() - self.work_start_time)
+                            / 1000
+                            / node.required_chip.research_time,
+                            "research",
+                        ],
+                    ],
+                ]
+            )
+        return sections
 
 
 class Computer(BuildingExt, name_id="computer"):
@@ -261,14 +300,123 @@ class Computer(BuildingExt, name_id="computer"):
         data["working"] = self.working
         data["work_start_time"] = shared.eval_delta(self.work_start_time)
         data["work_advance_amount"] = self.work_advance_amount
+        available_count = busy_count = missing_count = 0
+        for lab in self.near_laboratories:
+            if lab.can_work_for_computer(self):
+                available_count += 1
+            elif lab.is_busy(self):
+                busy_count += 1
+            elif lab.missing_resources(self):
+                missing_count += 1
+        if len(self.near_laboratories) <= 0:
+            data["labs"] = None
+        else:
+            data["labs"] = {
+                "employed": len(self.employed_laboratories),
+                "nearby": len(self.near_laboratories),
+                "available": available_count,
+                "busy": busy_count,
+                "missing": missing_count,
+            }
         return data
 
     def get_extra_data(self):
         return [lab.building.hitbox.center for lab in self.near_laboratories]
 
     def get_extra_raycast_data(self):
-        # if got chip: "Contains" -> chip
-        # "Remote" -> disabled/enabled
-        # specify what is being researched or whatever
-        # connected laboratories and shy
-        return None
+        sections = []
+        progress = (
+            0
+            if self.active_node is None
+            else (
+                god.research.research_progress[self.active_node] / self.active_node.cost
+            )
+        )
+        if self.working:
+            progress += (
+                (god.world.get_ticks() - self.work_start_time)
+                / 1000
+                / self.active_node.required_chip.research_time
+                / self.active_node.cost
+            ) * self.work_advance_amount
+        node_indicator = (
+            ["text", constants.YELLOW_WARNING, "Not selected"]
+            if self.active_node is None
+            else [
+                "research",
+                self.active_node.uid,
+                progress,
+            ]
+        )
+        research_indicators = [node_indicator]
+        sections.append(["Research", research_indicators])
+        if (
+            self.active_node is None
+            or self.active_node.required_chip == ItemOD.objects.research_chip_1
+        ):
+            sections.append(
+                [
+                    "Contains",
+                    [
+                        ["text", constants.UI_INFO_DESCR_COL, "(empty)"]
+                        if self.in_inv.empty
+                        else ["item", self.slot.item.uid, self.slot.amount]
+                    ],
+                ]
+            )
+        else:
+            if not self.in_inv.has(ItemOD.objects.remote_controller, 1):
+                research_indicators.append(
+                    [
+                        "text",
+                        constants.RED_BAD,
+                        "Missing remote controller",
+                    ]
+                )
+            laboratory_indicators = []
+            if len(self.near_laboratories) <= 0:
+                laboratory_indicators.append(["text", constants.RED_BAD, "None nearby"])
+            else:
+                if self.working:
+                    laboratory_indicators.append(
+                        [
+                            "text",
+                            constants.GREEN_GOOD,
+                            f"> {len(self.employed_laboratories)} employed",
+                        ]
+                    )
+                else:
+                    available_count = busy_count = missing_count = 0
+                    for lab in self.near_laboratories:
+                        if lab.can_work_for_computer(self):
+                            available_count += 1
+                        elif lab.is_busy(self):
+                            busy_count += 1
+                        elif lab.missing_resources(self):
+                            missing_count += 1
+                    if available_count > 0:
+                        laboratory_indicators.append(
+                            [
+                                "text",
+                                constants.GREEN_GOOD,
+                                f"> {available_count} available",
+                            ]
+                        )
+                    if busy_count > 0:
+                        laboratory_indicators.append(
+                            ["text", constants.YELLOW_WARNING, f"> {busy_count} busy"]
+                        )
+                    if missing_count > 0:
+                        laboratory_indicators.append(
+                            [
+                                "text",
+                                constants.RED_BAD,
+                                f"> {missing_count} missing requirements",
+                            ]
+                        )
+                laboratory_indicators.append(
+                    ["text", "white", f"{len(self.near_laboratories)} nearby"]
+                )
+
+            sections.append(["Chip Processors", laboratory_indicators])
+        return sections

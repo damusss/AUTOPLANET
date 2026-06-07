@@ -224,6 +224,7 @@ class ComputerInterface(BuildingInterface, name_id="computer"):
         self.back_btn = IconButton("left_arrow", "0.5", 0.9)
         self.delete_btn = IconButton("delete", "0.5", 0.6)
         self.available_nodes_rects = {}
+        self.labs: dict | None = None
 
     def refresh_data(self, base_data, building_data):
         self.refresh_inventories_data(base_data, building_data)
@@ -235,6 +236,7 @@ class ComputerInterface(BuildingInterface, name_id="computer"):
         self.working = building_data["working"]
         self.work_start_time = shared.eval_delta(building_data["work_start_time"])
         self.work_advance_amount = building_data["work_advance_amount"]
+        self.labs = building_data["labs"]
         self.available_nodes_rects = {}
 
     def render_research_node_selection(self, cont: pygame.Rect):
@@ -350,12 +352,25 @@ class ComputerInterface(BuildingInterface, name_id="computer"):
             if self.active_node is None
             else ("white" if self.working else constants.RED_BAD),
         )
-        self.research_rect = select_rect = pygame.Rect(
-            0, 0, slot_size, slot_size
-        ).move_to(center=(cont.centerx, cont.centery - cont.h / 4))
-        slot_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
-            center=(cont.centerx, cont.centery + cont.h / 4)
+        slot = self.inventories["in"][0]
+        remote_enabled = (
+            self.active_node is not None
+            and self.active_node.required_chip != ItemOD.objects.research_chip_1
         )
+        if remote_enabled:
+            self.research_rect = select_rect = pygame.Rect(
+                0, 0, slot_size, slot_size
+            ).move_to(midleft=(node_rect.left, cont.centery - cont.h / 4))
+            slot_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+                midright=(node_rect.right, cont.centery - cont.h / 4)
+            )
+        else:
+            self.research_rect = select_rect = pygame.Rect(
+                0, 0, slot_size, slot_size
+            ).move_to(center=(cont.centerx, cont.centery - cont.h / 4))
+            slot_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+                center=(cont.centerx, cont.centery + cont.h / 4)
+            )
         if (
             god.ui.inventory.render_slot(
                 select_rect,
@@ -367,7 +382,6 @@ class ComputerInterface(BuildingInterface, name_id="computer"):
             is not None
         ):
             god.ui.cursor = constants.CURSOR_HOVER
-        slot = self.inventories["in"][0]
         hovering_slot = god.ui.inventory.render_slot(
             slot_rect,
             slot,
@@ -387,19 +401,81 @@ class ComputerInterface(BuildingInterface, name_id="computer"):
             and self.active_node.required_chip != ItemOD.objects.research_chip_1
             and (slot.amount <= 0 or slot.item != ItemOD.objects.remote_controller)
         ):
-            err_h = cont.w * constants.UI_INVENTORY_TEXT_H_MULT
-            err_tex, err_rect = god.assets.font.get_texture_and_rect(
-                "One remote controller is required.",
-                constants.RED_BAD,
-                err_h,
-                cont.width - b * 2,
-            )
-            err_tex.draw(
-                None, err_rect.move_to(midbottom=(cont.centerx, cont.bottom - b))
-            )
+            self.render_remote_controller_error(cont, b)
+        if remote_enabled:
+            self.render_labs_info(cont, b)
         if hovering_slot and bool(hovering_slot) != hovering_slot:
             return hovering_slot
         return None
+
+    def render_labs_info(self, cont: pygame.Rect, b):
+        total_h = 0
+        to_draw = []
+        info_h = cont.w * constants.UI_INVENTORY_TEXT_H_MULT
+        title_h = cont.w * constants.UI_INVENTORY_TITLE_H_MULT
+        tex, rect = god.assets.font.get_texture_and_rect(
+            "Chip Processors:", "white", title_h
+        )
+        total_h += rect.h
+        to_draw.append((tex, rect, b * 2, 0))
+        if self.labs is None:
+            tex, rect = god.assets.font.get_texture_and_rect(
+                "None nearby", constants.RED_BAD, info_h
+            )
+            total_h += rect.h
+            to_draw.append((tex, rect, 0, 0))
+        else:
+            if self.labs["employed"] > 0:
+                tex, rect = god.assets.font.get_texture_and_rect(
+                    f"> {self.labs['employed']} employed", constants.GREEN_GOOD, info_h
+                )
+                total_h += rect.h
+                to_draw.append((tex, rect, 0, 0))
+            else:
+                if self.labs["available"] > 0:
+                    tex, rect = god.assets.font.get_texture_and_rect(
+                        f"> {self.labs['available']} available",
+                        constants.GREEN_GOOD,
+                        info_h,
+                    )
+                    total_h += rect.h
+                    to_draw.append((tex, rect, 0, 0))
+                if self.labs["busy"] > 0:
+                    tex, rect = god.assets.font.get_texture_and_rect(
+                        f"> {self.labs['busy']} busy",
+                        constants.YELLOW_WARNING,
+                        info_h,
+                    )
+                    total_h += rect.h
+                    to_draw.append((tex, rect, 0, 0))
+                if self.labs["missing"] > 0:
+                    tex, rect = god.assets.font.get_texture_and_rect(
+                        f"> {self.labs['missing']} missing requirements",
+                        constants.RED_BAD,
+                        info_h,
+                    )
+                    total_h += rect.h
+                    to_draw.append((tex, rect, 0, 0))
+            tex, rect = god.assets.font.get_texture_and_rect(
+                f"{self.labs['nearby']} nearby", "white", info_h
+            )
+            total_h += rect.h
+            to_draw.append((tex, rect, 0, b * 2))
+        y = cont.bottom - cont.height / 4.7 - total_h / 2
+        for tex, rect, b_post, b_prev in to_draw:
+            y += b_prev
+            tex.draw(None, rect.move_to(midtop=(cont.centerx, y)))
+            y += rect.height + b_post
+
+    def render_remote_controller_error(self, cont: pygame.Rect, b):
+        err_h = cont.w * constants.UI_INVENTORY_TEXT_H_MULT
+        err_tex, err_rect = god.assets.font.get_texture_and_rect(
+            "One remote controller is required.",
+            constants.RED_BAD,
+            err_h,
+            cont.width - b * 2,
+        )
+        err_tex.draw(None, err_rect.move_to(midbottom=(cont.centerx, cont.bottom - b)))
 
 
 class MinerInterface(BuildingInterface, name_id="miner"):

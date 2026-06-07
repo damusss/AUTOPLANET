@@ -286,21 +286,29 @@ class ScreenUI:
 
     def render_debug_indicators(self, left):
         size = god.windowing.height * constants.UI_DEBUG_INDICATORS_H_MULT
-        for item_name, active, key_num, color in (
+        for item_name, active, key_num, color, alpha_boost in (
             (
                 "energy_transmitter",
                 god.rendering.energy_debug,
                 1,
                 constants.ENERGY_DEBUG_COLOR,
+                0,
             ),
-            ("bot", god.rendering.trajectory_debug, 2, constants.TRAJECTORY_COLOR),
+            ("bot", god.rendering.trajectory_debug, 2, constants.TRAJECTORY_COLOR, 0),
+            (
+                "laboratory",
+                god.rendering.computer_debug,
+                3,
+                constants.UI_COMPUTER_DEBUG_INDICATOR_COLOR,
+                35,
+            ),
         ):
             tex = god.assets.building_preview_texs[item_name]
             tex.alpha = (
                 constants.OPAQUE_INDICATOR_ALPHA
                 if active
                 else constants.GHOST_INDICATOR_ALPHA
-            )
+            ) + alpha_boost
             tex.color = color
             rect = pygame.Rect(0, 0, size, size).move_to(topleft=(left, self.b))
             tex.draw(None, rect)

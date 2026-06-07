@@ -167,6 +167,13 @@ class Input:
             ):
                 if not god.ui.any_menu_open:
                     god.ui.click_hotbar(event.key - pygame.K_1)
+                elif (
+                    god.ui.inventory_open
+                    and god.ui.open_interface == god.ui.crafting_interface
+                ):
+                    idx = event.key - pygame.K_1
+                    if idx < len(constants.CRAFTING_INTERFACE_SECTIONS):
+                        god.ui.crafting_interface.selected_category = idx
             elif event.key == pygame.K_e:
                 god.ui.toggle_inventory(True)
             elif event.key == pygame.K_TAB:

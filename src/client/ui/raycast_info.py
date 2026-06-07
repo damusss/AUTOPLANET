@@ -1,11 +1,12 @@
 import typing
+from functools import partial
 
 import pygame
 
 from src import shared
 from src import constants
 from src.client import god
-from src.object_data import ItemOD, TileOD, BuildingOD
+from src.object_data import ItemOD, TileOD, BuildingOD, ResearchNodeOD
 from src.client.ui.panel import render_panel_bg
 
 if typing.TYPE_CHECKING:
@@ -468,6 +469,7 @@ class RaycastInfoUI:
         box = pygame.Rect(god.windowing.width - col_w - bb, top + bb, col_w, bb)
         to_draw = []
         to_draw_alpha = []
+        to_draw_partial = []
         for section_name, indicators in raycast.data[-1]:
             title_tex, title_rect = god.assets.font.get_texture_and_rect(
                 section_name, "white", title_h
@@ -518,6 +520,23 @@ class RaycastInfoUI:
                             )
                         )
                         box.h += jump
+                    case ["research", node_uid, progress]:
+                        node = ResearchNodeOD.get(node_uid)
+                        card_rect = pygame.Rect(
+                            0,
+                            0,
+                            content_w,
+                            content_w * constants.UI_RESEARCH_CARD_H_MULT,
+                        ).move_to(midtop=(box.centerx, box.bottom))
+                        to_draw_partial.append(
+                            partial(
+                                god.ui.research.render_research_node_card,
+                                card_rect,
+                                node,
+                                progress,
+                            ),
+                        )
+                        box.h += card_rect.height + b
                     case ["progress", percentage, icon_name]:
                         icon = god.assets.icons_texs[icon_name]
                         icon_size = content_w / 2
@@ -554,6 +573,8 @@ class RaycastInfoUI:
         for tex, srcrect, rect, alpha in to_draw_alpha:
             tex.alpha = alpha
             tex.draw(srcrect, rect)
+        for func in to_draw_partial:
+            func()
         return box.bottom
 
     def render_drop_amount(self, top, raycast: shared.RaycastHit, col_w, cs, bb, b):
