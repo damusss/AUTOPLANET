@@ -1,7 +1,9 @@
 {
     "display_name": "Mold Patch",
     "description": "NOT IMPLEMENTED",
-    "item_drop": [],
+    "item_drop": [["mold", 2]],
     "break_requirements": null,
-    "break_time_s": -1
+    "break_time_s": -1,
+    "miner_time_s": 2,
+    "mold_can_infect": false
 }

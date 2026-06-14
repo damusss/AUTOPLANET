@@ -1,0 +1,15 @@
+{
+    "display_name": "Mold Harvester",
+    "description": "",
+    "stack_size": "default_building",
+    "create_data": {
+        "type": "hands",
+        "time_s": 5,
+        "recipe": [
+            ["nylium_harvester", 1],
+            ["titanium_plate", 3],
+            ["mold_spray", 1],
+            ["ammonia", 10]
+        ]
+    }
+}

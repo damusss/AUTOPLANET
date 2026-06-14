@@ -30,8 +30,13 @@ class WorldRendering:
         self.camera_ui = camera_ui.CameraUI(self.renderer)
         self.debug = False
         self.energy_debug = False
+        self.auto_energy_debug = False
         self.computer_debug = False
+        self.auto_computer_debug = False
         self.trajectory_debug = False
+        self.potential_debug = False
+        self.sanitizer_debug = False
+        self.auto_sanitizer_debug = False
         self.edit_trajectory_hover_available = constants.BUILDING_STATUS_AVAILABLE
         self.edit_trajectory_too_far_units = None
         assert special_renderers

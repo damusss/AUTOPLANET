@@ -7,7 +7,7 @@ from src.object_data import ItemOD
 
 if typing.TYPE_CHECKING:
     from src.server.player import Player
-    from src.server.building import BuildingExt
+    from src.server.building import StaticBuildingExt
 
 
 class CommonInventory:
@@ -88,7 +88,7 @@ class CommonInventory:
 
 class BuildingInventory(CommonInventory):
     def __init__(self, bext, *slots):
-        self.bext: "BuildingExt" = bext
+        self.bext: "StaticBuildingExt" = bext
         self.slots: list[shared.Slot] = []
         for slot in slots:
             self.add_slot(slot)
@@ -117,7 +117,6 @@ class Inventory(CommonInventory):
         )
         # temp testing
         self.add(ItemOD.objects.crafter, 5)
-        self.add(ItemOD.objects.nylium_harvester, 5)
         self.add(ItemOD.objects.bricks_platform, 100)
         self.add(ItemOD.objects.copper_platform, 100)
         self.add(ItemOD.objects.storage, 10)
@@ -134,6 +133,11 @@ class Inventory(CommonInventory):
         self.add(ItemOD.objects.remote_controller, 10)
         self.add(ItemOD.objects.research_chip_1, 500)
         self.add(ItemOD.objects.research_chip_2, 500)
+        self.add(ItemOD.objects.mold_spray, 1)
+        self.add(ItemOD.objects.ammonia, 200)
+        self.add(ItemOD.objects.mold_harvester, 5)
+        self.add(ItemOD.objects.mold_miner, 5)
+        self.add(ItemOD.objects.dev_energy_generator, 10)
 
     def set_dirty(self):
         self.dirty = True

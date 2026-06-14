@@ -3,5 +3,6 @@
     "description": "NOT IMPLEMENTED",
     "item_drop": [["deep_ore", 1]],
     "break_requirements": ["pickaxe", "titanium_pickaxe"],
-    "break_time_s": 0.35
+    "break_time_s": 0.35,
+    "mold_can_infect": false
 }

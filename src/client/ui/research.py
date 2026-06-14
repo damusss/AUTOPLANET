@@ -257,22 +257,29 @@ class ResearchInterface:
             )
             computed_layer = {}
             for node_name_id, connect_to in horiz_layer:
-                node = ResearchNodeOD.get(node_name_id)
-                unlocked = node in god.world.researched_nodes
-                rect = pygame.Rect(cur_x, cur_y, card_w, card_h)
-                hovering_item = self.render_research_node_card(
-                    rect,
-                    node,
-                    god.world.research_progress[node] / node.cost,
-                    outline_color=constants.UI_RESEARCH_PROGRESS_COL
-                    if unlocked
-                    else "white",
-                    force_hover=unlocked,
-                    hover_offset=self.view_rect.topleft,
-                )
-                if hovering_item is not None and bool(hovering_item) != hovering_item:
-                    hovering_slot = hovering_item
-                computed_layer[node.name_id] = rect
+                if node_name_id == "_line_":
+                    rect = pygame.Rect(cur_x, cur_y, card_w, card_h)
+                    computed_layer[node_name_id] = rect
+                else:
+                    node = ResearchNodeOD.get(node_name_id)
+                    unlocked = node in god.world.researched_nodes
+                    rect = pygame.Rect(cur_x, cur_y, card_w, card_h)
+                    hovering_item = self.render_research_node_card(
+                        rect,
+                        node,
+                        god.world.research_progress[node] / node.cost,
+                        outline_color=constants.UI_RESEARCH_PROGRESS_COL
+                        if unlocked
+                        else "white",
+                        force_hover=unlocked,
+                        hover_offset=self.view_rect.topleft,
+                    )
+                    if (
+                        hovering_item is not None
+                        and bool(hovering_item) != hovering_item
+                    ):
+                        hovering_slot = hovering_item
+                    computed_layer[node.name_id] = rect
                 cur_y += card_h + space_y
             computed_layout.append(computed_layer)
             cur_x += card_w + space_x
@@ -284,19 +291,28 @@ class ResearchInterface:
             computed_layer = computed_layout[i]
             next_computed_layer = computed_layout[i + 1]
             for j, (node_name_id, connect_to) in enumerate(horiz_layer):
+                if connect_to is None:
+                    continue
                 start_point = computed_layer[node_name_id].midright
                 rects_to_connect = []
                 if connect_to == "_next_":
-                    rects_to_connect = next_computed_layer.values()
+                    for key, rect in next_computed_layer.items():
+                        rects_to_connect.append((rect, key == "_line_"))
                 elif connect_to == "_same_h_":
-                    rects_to_connect.append(
-                        next_computed_layer[list(next_computed_layer.keys())[j]]
-                    )
+                    key = list(next_computed_layer.keys())[j]
+                    rects_to_connect.append((next_computed_layer[key], key == "_line_"))
                 else:
-                    rects_to_connect.append(next_computed_layer[connect_to])
+                    rects_to_connect.append(
+                        (next_computed_layer[connect_to], connect_to == "_line_")
+                    )
                 self.renderer.draw_color = "white"
-                if ResearchNodeOD.get(node_name_id) in god.world.researched_nodes:
+                if (
+                    node_name_id != "_line_"
+                    and ResearchNodeOD.get(node_name_id) in god.world.researched_nodes
+                ):
                     self.renderer.draw_color = constants.UI_RESEARCH_PROGRESS_COL
-                for other_rect in rects_to_connect:
+                for other_rect, is_line in rects_to_connect:
                     self.renderer.draw_line(start_point, other_rect.midleft)
+                    if is_line:
+                        self.renderer.draw_line(other_rect.midleft, other_rect.midright)
         return hovering_slot

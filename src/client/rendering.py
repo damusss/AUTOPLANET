@@ -14,6 +14,31 @@ if typing.TYPE_CHECKING:
     from src.client.world.chunk import BuildingDataHolder
 
 
+class QuadsMesh:
+    def __init__(self):
+        self.vertices = []
+        self.indices = []
+        self.quad_count = 0
+
+    def add(self, topleft, size, color):
+        topleft = pygame.Vector2(topleft)
+        self.vertices += [
+            (topleft, color, (0, 0)),
+            ((topleft.x + size, topleft.y), color, (1, 0)),
+            (topleft + pygame.Vector2(size, size), color, (1, 1)),
+            ((topleft.x, topleft.y + size), color, (0, 1)),
+        ]
+        self.indices += [
+            self.quad_count + 0,
+            self.quad_count + 1,
+            self.quad_count + 2,
+            self.quad_count + 2,
+            self.quad_count + 3,
+            self.quad_count + 0,
+        ]
+        self.quad_count += 4
+
+
 class RenderingLayer:
     def render(self, renderer): ...
 
@@ -77,6 +102,7 @@ class MeshRenderingLayer(RenderingLayer):
             transform_matrix=matrix,
         )
 
+
 class SpecialBuildingRenderer:
     REGISTERED_RENDERERS = {}
 
@@ -90,6 +116,4 @@ class SpecialBuildingRenderer:
     def get_renderer(cls, name_id: str):
         return cls.REGISTERED_RENDERERS.get(name_id, cls)
 
-    def render(self, renderer: Renderer):
-        ...
-
+    def render(self, renderer: Renderer): ...

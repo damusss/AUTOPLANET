@@ -8,9 +8,8 @@
         "time_s": 4,
         "recipe": [
             ["diamond", 1],
-            ["ammonia", 10],
-            ["mold_spray", 1],
-            ["remote_controller", 1]
+            ["ammonia", 4],
+            ["mold_spray", 1]
         ]
     }
 }

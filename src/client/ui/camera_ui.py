@@ -5,7 +5,7 @@ import pygame
 from src import shared
 from src import constants
 from src.client import god
-from src.object_data import BuildingOD
+from src.object_data import BuildingOD, ItemOD
 from src.client.ui.panel import render_panel_bg
 
 if constants.NEW_RENDER:
@@ -24,6 +24,7 @@ class CameraUI:
             and god.player.building_preview is None
             and god.ui.can_interact_world()
             and god.player.break_start_time is not None
+            and not isinstance(god.player.raycast.object_data, ItemOD)
         ):
             self.render_break_anim(
                 god.player.break_start_time,
@@ -37,10 +38,14 @@ class CameraUI:
             if other_player.break_data is not None:
                 self.render_break_anim(*other_player.break_data)
         self.render_building_warnings()
-        if god.rendering.energy_debug:
+        if god.rendering.energy_debug or god.rendering.auto_energy_debug:
             self.render_energy_debug()
-        if god.rendering.computer_debug:
+        if god.rendering.computer_debug or god.rendering.auto_computer_debug:
             self.render_computer_debug()
+        if god.rendering.potential_debug:
+            self.render_potential_debug()
+        if god.rendering.sanitizer_debug or god.rendering.auto_sanitizer_debug:
+            self.render_sanitizer_debug()
 
     def render_break_anim(self, start_time, center, break_time_s, building_data):
         percent = (god.world.get_ticks() - start_time) / (break_time_s * 1000)
@@ -105,11 +110,7 @@ class CameraUI:
         conns = {}
         for chunk in god.world.loaded_chunks.values():
             for bd in chunk.static_buildings:
-                tex = None
-                if bd.building_od == BuildingOD.objects.energy_plant:
-                    tex = god.assets.energy_plant_debug_tex
-                elif bd.building_od == BuildingOD.objects.energy_transmitter:
-                    tex = god.assets.energy_transmitter_debug_tex
+                tex = god.assets.energy_debug_texs.get(bd.building_od.name_id, None)
 
                 if tex is not None:
                     rect = god.camera.rect_to_screen(
@@ -144,6 +145,20 @@ class CameraUI:
                 else constants.NO_ENERGY_DEBUG_COLOR
             )
             self.renderer.draw_line(god.camera.to_screen(a), god.camera.to_screen(b))
+
+    def render_potential_debug(self):
+        for chunk in god.world.loaded_chunks.values():
+            if chunk.potential_debug_texture is not None:
+                chunk.potential_debug_texture.draw(
+                    None, god.camera.rect_to_screen(chunk.world_rect)
+                )
+
+    def render_sanitizer_debug(self):
+        for chunk in god.world.loaded_chunks.values():
+            if chunk.sanitizer_debug_texture is not None:
+                chunk.sanitizer_debug_texture.draw(
+                    None, god.camera.rect_to_screen(chunk.world_rect)
+                )
 
     def render_computer_debug(self):
         for chunk in god.world.loaded_chunks.values():
@@ -370,11 +385,7 @@ class CameraUI:
             constants.ENDPOINT_MACHINE,
             constants.ENDPOINT_RESEARCH,
         ]:
-            debug_tex = (
-                god.assets.energy_plant_debug_tex
-                if preview == BuildingOD.objects.energy_plant
-                else god.assets.energy_transmitter_debug_tex
-            )
+            debug_tex = god.assets.energy_debug_texs[preview.name_id]
             debug_tex.color = constants.ENERGY_DEBUG_COLOR
             debug_tex.alpha = constants.ENERGY_DEBUG_ALPHA
             debug_tex.draw(
@@ -388,6 +399,18 @@ class CameraUI:
             debug_tex.alpha = constants.OPAQUE
         if preview == BuildingOD.objects.computer:
             self.render_single_computer_debug(rect)
+        if preview == BuildingOD.objects.mold_sanitizer:
+            god.assets.white_tex.color = constants.MOLD_SANITIZER_DEBUG_COLOR
+            god.assets.white_tex.alpha = constants.MOLD_SANITIZER_DEBUG_ALPHA
+            god.assets.white_tex.draw(
+                None,
+                god.camera.rect_to_screen(
+                    rect.inflate(
+                        constants.SANITIZER_SQUARE_RADIUS * 2,
+                        constants.SANITIZER_SQUARE_RADIUS * 2,
+                    )
+                ),
+            )
         tex = god.assets.building_preview_texs[preview.name_id]
         tex.color = color
         tex.alpha = constants.BUILDING_PREVIEW_ALPHA

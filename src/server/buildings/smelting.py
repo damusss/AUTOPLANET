@@ -4,11 +4,11 @@ from src.server import god
 from src.timerc import timerc
 from src.shared import Slot
 from src.object_data import ItemOD
-from src.server.building import BuildingExt
+from src.server.building import StaticBuildingExt
 from src.server.inventory import BuildingInventory
 
 
-class Furnace(BuildingExt, name_id="furnace"):
+class Furnace(StaticBuildingExt, name_id="furnace"):
     def init(self):
         self.in_slot = Slot(
             None, 0, [constants.INVENTORY_FILTER_CATEGORY, ["smeltables"]], 0
@@ -29,6 +29,10 @@ class Furnace(BuildingExt, name_id="furnace"):
         if not self.working:
             self.try_to_work()
 
+    def on_mold_purge(self):
+        if not self.working:
+            self.try_to_work()
+
     def stop_working(self):
         self.working = False
         self.building.change_state("off")
@@ -41,7 +45,7 @@ class Furnace(BuildingExt, name_id="furnace"):
             self.stop_working()
 
     def try_to_work(self):
-        if not self.building.has_energy:
+        if not self.building.has_energy or self.building.moldy:
             return False
         if self.in_inv.empty:
             return False

@@ -1,0 +1,9 @@
+{
+    "display_name": "Improved Research #2",
+    "description": "NOTIMPLEMENTED",
+    "path_name": "Better Chip Path",
+    "required_chip": 2,
+    "required_nodes": ["mold_protection", "ease_of_movement", "pet_lamp", "mold_breaking"],
+    "unlocks": ["research_chip_3"],
+    "cost": 150
+}

@@ -57,26 +57,36 @@ class BuildingInterface:
             bottom = self.render_energy_status(bottom, cont)
         return bottom
 
-    def render_energy_status(self, title_bottom, cont: pygame.Rect):
-        title_h = cont.w * constants.UI_INVENTORY_TEXT_H_MULT
-        title_tex, title_rect = god.assets.font.get_texture_and_rect(
+    def render_energy_status(self, bottom, cont: pygame.Rect):
+        text_h = cont.w * constants.UI_INVENTORY_TEXT_H_MULT
+        energy_tex, energy_rect = god.assets.font.get_texture_and_rect(
             "Has energy" if self.building_data.has_energy else "No energy",
             constants.GREEN_GOOD
             if self.building_data.has_energy
             else constants.RED_BAD,
-            title_h,
+            text_h,
         )
-        title_tex.draw(
-            None, title_rect.move_to(midtop=(cont.centerx, title_bottom + self.b))
-        )
-        return title_bottom + title_rect.h + self.b * 2
+        energy_rect = energy_rect.move_to(midtop=(cont.centerx, bottom + self.b))
+        bottom = energy_rect.bottom + self.b
+        energy_tex.draw(None, energy_rect)
+        if self.building_data.moldy:
+            mold_tex, mold_rect = god.assets.font.get_texture_and_rect(
+                "Moldy", constants.RED_BAD, text_h
+            )
+            mold_rect = mold_rect.move_to(midtop=(cont.centerx, bottom + self.b))
+            bottom = mold_rect.bottom + self.b
+            mold_tex.draw(None, mold_rect)
+        return bottom
 
-    def render_icon_progress(self, icon, rect, progress_active, start_time, time_s):
+    def render_icon_progress(self, icon, rect, progress_active, start_time, time_s, mult_override=None):
         icon.alpha = constants.UI_INTERFACE_ICON_ALPHA
         icon.draw(None, rect)
         icon.alpha = constants.OPAQUE
         if progress_active and time_s != 0:
-            mult = (god.world.get_ticks() - start_time) / (time_s * 1000)
+            if mult_override is not None:
+                mult = mult_override
+            else:
+                mult = (god.world.get_ticks() - start_time) / (time_s * 1000)
             perc_source_h = icon.height * mult
             perc_icon_h = rect.w * mult
             icon.draw(

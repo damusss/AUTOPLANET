@@ -165,7 +165,7 @@ class Server:
         elif mail.compare(constants.MAIL_PLACE_BUILDING):
             if mail.client_id in self.world.players:
                 player = self.world.players[mail.client_id]
-                self.world.place_building(
+                self.world.try_place_building(
                     BuildingOD.get(mail.building_uid), pygame.Vector2(mail.pos), player
                 )
         elif mail.compare(constants.MAIL_BUILDING_INTERACT):

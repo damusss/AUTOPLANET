@@ -4,11 +4,11 @@ from src import shared
 from src import constants
 from src.server import god
 from src.object_data import VegetationOD
-from src.server.building import Building, BuildingExt
+from src.server.building import StaticBuilding, StaticBuildingExt
 
 
 class EnergyProvider:
-    def __init__(self, building: "Building"):
+    def __init__(self, building: "StaticBuilding"):
         self.building = building
         self.id = self.building.id
         self.center = pygame.Vector2(building.hitbox.center)
@@ -19,19 +19,19 @@ class EnergyProvider:
 
 
 class EnergyConn:
-    def __init__(self, a: BuildingExt, b: BuildingExt):
+    def __init__(self, a: StaticBuildingExt, b: StaticBuildingExt):
         self.a = a
         self.b = b
         self.endpoints = [self.a, self.b]
         self.alive = True
 
-    def activate(self, source: BuildingExt):
+    def activate(self, source: StaticBuildingExt):
         self.other_endpoint(source).on_conn_activated(self)
 
-    def disrupted(self, source: BuildingExt, state):
+    def disrupted(self, source: StaticBuildingExt, state):
         self.other_endpoint(source).on_conn_disrupted(self, state)
 
-    def other_endpoint(self, endpoint: BuildingExt) -> BuildingExt:
+    def other_endpoint(self, endpoint: StaticBuildingExt) -> StaticBuildingExt:
         for e in self.endpoints:
             if e != endpoint:
                 return e
@@ -70,7 +70,7 @@ class EnergyConn:
         ]
 
 
-class EnergyPlant(BuildingExt, name_id="energy_plant"):
+class EnergyPlant(StaticBuildingExt, name_id="energy_plant"):
     def init(self):
         self.providing_chunks = set()
         self.provider = EnergyProvider(self.building)
@@ -161,7 +161,68 @@ class EnergyPlant(BuildingExt, name_id="energy_plant"):
         god.world.energy_disrupt(self, copy)
 
 
-class EnergyTransmitter(BuildingExt, name_id="energy_transmitter"):
+class DevEnergyGenerator(StaticBuildingExt, name_id="dev_energy_generator"):
+    def init(self):
+        self.providing_chunks = set()
+        self.provider = EnergyProvider(self.building)
+        self.building.has_energy = True
+
+    def can_provide_energy(self):
+        return True
+
+    def on_conn_activated(self, conn): ...
+
+    def on_conn_disrupted(self, conn, state):
+        if self.building.id not in god.world.disrupt_alerted_plants:
+            god.world.disrupt_alerted_plants.add(self.building.id)
+
+    def on_place(self):
+        chunks = god.world.load_or_get_chunks(
+            shared.get_chunk_keys_colliding_circle(
+                self.provider.center, self.provider.radius
+            )
+        )
+        for chunk in chunks:
+            self.providing_chunks.add(chunk.chunk_key)
+            for provider in chunk.energy_providers:
+                if shared.rect_collide_circle(
+                    provider.building.hitbox, self.provider.center, self.provider.radius
+                ):
+                    EnergyConn(self, provider.building.ext).finalize()
+            for building in chunk.buildings:
+                if (
+                    (
+                        building.building_od.energy_endpoint_type
+                        in [constants.ENDPOINT_MACHINE, constants.ENDPOINT_RESEARCH]
+                    )
+                    and shared.rect_collide_circle(
+                        building.hitbox, self.provider.center, self.provider.radius
+                    )
+                    and building.building_od.need_energy
+                ):
+                    EnergyConn(self, building.ext).finalize()
+            chunk.energy_providers.add(self.provider)
+        self.send_energy_activation()
+
+    def send_energy_activation(self):
+        for conn in self.energy_conns:
+            conn.activate(self)
+
+    def on_destroy(self):
+        self.destroyed = True
+        for ckey in self.providing_chunks:
+            chunk = god.world.chunks[ckey]
+            if self.provider in chunk.energy_providers:
+                chunk.energy_providers.remove(self.provider)
+        self.providing_chunks = set()
+        copy = self.energy_conns.copy()
+        for conn in list(self.energy_conns):
+            conn.destroy()
+            conn.other_endpoint(self).building.chunk.refresh()
+        god.world.energy_disrupt(self, copy)
+
+
+class EnergyTransmitter(StaticBuildingExt, name_id="energy_transmitter"):
     def init(self):
         self.providing_chunks = set()
         self.provider = EnergyProvider(self.building)

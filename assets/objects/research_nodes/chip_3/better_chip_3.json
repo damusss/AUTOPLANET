@@ -1,0 +1,12 @@
+{
+    "display_name": "Improved Research #3",
+    "description": "NOTIMPLEMENTED",
+    "path_name": "Better Chip Path",
+    "required_chip": 3,
+    "required_nodes": [
+        "fast_movement", "titanium_begins", "titanium_crafting", "titanium_smelting", "titanium_mining",
+        "pet_collector", "mold_harvesting"
+    ],
+    "unlocks": ["research_chip_4"],
+    "cost": 200
+}

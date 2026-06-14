@@ -10,7 +10,7 @@ from src.server import terrain
 from src.object_data import Star, Dust, BigStar, BlackHole, VegetationOD
 from src.server.drop import Drop
 from src.server.energy import EnergyProvider
-from src.server.building import Building, MovingBuilding
+from src.server.building import StaticBuilding, MovingBuilding
 from src.server.buildings import Computer
 
 
@@ -44,7 +44,7 @@ class Chunk:
         self.generate()
 
     @property
-    def buildings(self) -> typing.Generator[Building, typing.Any, None]:
+    def buildings(self) -> typing.Generator[StaticBuilding, typing.Any, None]:
         return (  # type: ignore
             god.world.buildings[bid]
             for bid in self.building_ids

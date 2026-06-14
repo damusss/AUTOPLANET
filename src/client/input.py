@@ -12,8 +12,6 @@ class Input:
         self.input_dir = pygame.Vector2()
         self.mouse_screen = pygame.Vector2()
         self.mouse_world = pygame.Vector2()
-        self.manual_energy_debug = False
-        self.manual_computer_debug = False
         self.place_time = 0
         self.place_pos = None
         self.drag_enabled = False
@@ -150,12 +148,14 @@ class Input:
                 god.rendering.debug = not god.rendering.debug
             elif event.key == pygame.K_F1:
                 god.rendering.energy_debug = not god.rendering.energy_debug
-                self.manual_energy_debug = True
             elif event.key == pygame.K_F2:
                 god.rendering.trajectory_debug = not god.rendering.trajectory_debug
             elif event.key == pygame.K_F3:
                 god.rendering.computer_debug = not god.rendering.computer_debug
-                self.manual_computer_debug = True
+            elif event.key == pygame.K_F4:
+                god.rendering.potential_debug = not god.rendering.potential_debug
+            elif event.key == pygame.K_F5:
+                god.rendering.sanitizer_debug = not god.rendering.sanitizer_debug
             elif event.key == pygame.K_p:
                 god.client.conn.mail(constants.MAIL_TOGGLE_PAUSE)
             elif event.key == pygame.K_z:
@@ -190,6 +190,8 @@ class Input:
                     god.rendering.energy_debug = False
                     god.rendering.trajectory_debug = False
                     god.rendering.computer_debug = False
+                    god.rendering.potential_debug = False
+                    god.rendering.sanitizer_debug = False
                     god.ui.close_any_menu()
             elif event.key == pygame.K_q:
                 god.player.set_building_preview(None)

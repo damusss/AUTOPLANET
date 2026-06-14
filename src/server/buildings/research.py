@@ -6,11 +6,11 @@ from src.server import god
 from src.timerc import timerc
 from src.shared import Slot
 from src.object_data import ItemOD, ResearchNodeOD, BuildingOD
-from src.server.building import BuildingExt
+from src.server.building import StaticBuildingExt
 from src.server.inventory import BuildingInventory
 
 
-class Laboratory(BuildingExt, name_id="laboratory"):
+class Laboratory(StaticBuildingExt, name_id="laboratory"):
     def init(self):
         self.slot = Slot(
             None, 0, filter_=[constants.INVENTORY_FILTER_CATEGORY, ["research_chips"]]
@@ -30,7 +30,9 @@ class Laboratory(BuildingExt, name_id="laboratory"):
     def can_work_for_computer(self, computer: "Computer"):
         return (
             self.building.has_energy
+            and not self.building.moldy
             and (not self.working or self.working_for is computer)
+            and computer.active_node is not None
             and self.in_inv.has(computer.active_node.required_chip, 1)
         )
 
@@ -38,8 +40,11 @@ class Laboratory(BuildingExt, name_id="laboratory"):
         return self.working and not self.working_for is computer
 
     def missing_resources(self, computer: "Computer"):
-        return not self.building.has_energy or not self.in_inv.has(
-            computer.active_node.required_chip, 1
+        return (
+            not self.building.has_energy
+            or self.building.moldy
+            or computer.active_node is None
+            or not self.in_inv.has(computer.active_node.required_chip, 1)
         )
 
     def start_working_for_computer(self, computer: "Computer"):
@@ -61,6 +66,10 @@ class Laboratory(BuildingExt, name_id="laboratory"):
         if not self.working:
             self.notify_computers_ready_to_work()
 
+    def on_mold_purge(self):
+        if not self.working:
+            self.notify_computers_ready_to_work()
+
     def on_inventory_dirty(self):
         if not self.working:
             self.notify_computers_ready_to_work()
@@ -79,6 +88,7 @@ class Laboratory(BuildingExt, name_id="laboratory"):
                 computer.building.chunk.refresh()
 
     def on_destroy(self):
+        self.drop_inventories()
         for computer in self.near_computers:
             computer.near_laboratories.discard(self)
 
@@ -131,7 +141,7 @@ class Laboratory(BuildingExt, name_id="laboratory"):
         return sections
 
 
-class Computer(BuildingExt, name_id="computer"):
+class Computer(StaticBuildingExt, name_id="computer"):
     @property
     def area_hitbox(self):
         return pygame.FRect(
@@ -164,6 +174,10 @@ class Computer(BuildingExt, name_id="computer"):
         if not self.working:
             self.try_to_work()
 
+    def on_mold_purge(self):
+        if not self.working:
+            self.try_to_work()
+
     def on_inventory_dirty(self):
         if not self.working:
             self.try_to_work()
@@ -174,11 +188,10 @@ class Computer(BuildingExt, name_id="computer"):
         for lab in self.employed_laboratories:
             lab.stop_working()
         self.employed_laboratories = []
-        self.building.change_state("off")
-        self.building.refresh_interact()
+        self.building.change_state("off", refresh_interact=True)
 
     def try_to_work(self):
-        if not self.building.has_energy:
+        if not self.building.has_energy or self.building.moldy:
             return False
         if self.active_node is None:
             return False
@@ -199,8 +212,7 @@ class Computer(BuildingExt, name_id="computer"):
             self.work_advance_amount = 1
             self.in_inv.remove(self.active_node.required_chip, 1)
             god.research.future_advance_research(self.active_node, 1)
-            self.building.change_state("on")
-            self.building.refresh_interact()
+            self.building.change_state("on", refresh_interact=True)
             timerc.add(
                 self.active_node.required_chip.research_time, self.on_finish_work
             )
@@ -231,8 +243,7 @@ class Computer(BuildingExt, name_id="computer"):
             )
             for lab in self.employed_laboratories:
                 lab.start_working_for_computer(self)
-            self.building.change_state("on")
-            self.building.refresh_interact()
+            self.building.change_state("on", refresh_interact=True)
             timerc.add(
                 self.active_node.required_chip.research_time, self.on_finish_work
             )
@@ -256,7 +267,7 @@ class Computer(BuildingExt, name_id="computer"):
     def on_place(self):
         super().on_place()
         area_hitbox = self.area_hitbox
-        chunks = god.world.get_chunks_collding_rect(area_hitbox)
+        chunks = god.world.get_chunks_colliding_aligned_rect(pygame.Rect(area_hitbox))
         for chunk in chunks:
             chunk.computers.add(self)
             self.registered_chunks.add(chunk)
@@ -269,6 +280,7 @@ class Computer(BuildingExt, name_id="computer"):
                         self.near_laboratories.add(lab)
 
     def on_destroy(self):
+        self.drop_inventories()
         for chunk in self.registered_chunks:
             chunk.computers.discard(self)
         for lab in self.near_laboratories:

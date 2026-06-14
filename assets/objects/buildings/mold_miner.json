@@ -1,4 +1,16 @@
 {
-    "size": [2, 2],
-    "floor_whitelist": ["mold_patch"]
+    "size": [1, 3],
+    "floor_whitelist": ["mold_patch"],
+    "altitude_range": [100, 130],
+    "states": {
+        "on": {
+            "default_image": true,
+            "light": {
+                "radius": 8,
+                "intensity": 200,
+                "color": "#ff0053"
+            }
+        },
+        "off": {"default": true}
+    }
 }

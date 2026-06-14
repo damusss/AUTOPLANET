@@ -148,12 +148,12 @@ RAYCAST_VEGETATION = "vegetation"
 RAYCAST_UI_ITEM = "item"
 RAYCAST_UI_SLOT_FILTER = "slot_filter"
 
-RAYCASTFLAG_CHUNK = "chunk"
 RAYCASTFLAG_DEFAULT = "default"
 RAYCASTFLAG_COLLIDER = "collider"
 RAYCASTFLAG_VEGETATION = "vegetation"
 RAYCASTFLAG_INFO = "info"
 RAYCASTFLAG_ALL = "all"
+RAYCASTFLAG_ALL_INFO = "all_info"
 
 BUILDING_ID_LEN = 10
 BUILDING_ID_ALPHABET = string.ascii_letters + string.digits + string.punctuation
@@ -192,6 +192,37 @@ ENDPOINT_RESEARCH = "research"
 
 COMPUTER_SQUARE_RADIUS = 4
 
+# mold
+
+POTENTIAL_ENERGY_BUILDING_SPREAD_RADIUS = 10
+SANITIZER_SQUARE_RADIUS = 7
+MOLD_SANITIZER_CONSUME_TIME = 60*1
+MOLD_INFECTION_BASE_TIME = 60*10
+MOLD_INFECTION_MINUMUM_TIME = 10
+BUILDING_POTENTIAL_ENERGY_LEVEL = 100
+MOLD_BREAKER_CONSUME_AMOUNT = 1#20
+
+MOLDY = 1
+MOLD_FREE = 0
+MOLD_SPRAY_CONSUME_AMOUNT = 1
+
+MOLD_I = 3
+POTENTIAL_I = 0
+POTENTIAL_COUNT_I = 1
+MOLDY_I = 2
+SANITIZERS_I = 3
+
+MOLD_SPREAD_DIRECTIONS = [
+    (-1, -1),
+    (1, 1),
+    (-1, 1),
+    (1, -1),
+    (-1, 0),
+    (1, 0),
+    (0, -1),
+    (0, 1),
+]
+
 # ui generic
 DOUBLE_CLICK_TIME = 0.3
 
@@ -210,6 +241,7 @@ DAMAGE_OVERLAY_SHOW_IF_DAMAGE_ATLEAST = 5
 
 # ui colors
 GREEN_GOOD = "#00DD93"
+LIGHT_GREEN = "#B8DD73"
 RED_BAD = "#EE0055"
 YELLOW_WARNING = "#ffc800"
 
@@ -220,7 +252,7 @@ CRAFTING_SLOT_COLORS = {
     CRAFT_READY: GREEN_GOOD,
     CRAFT_UNAVAILABLE: RED_BAD,
     CRAFT_NOT_READY: "#C345AA",
-    CRAFT_READY_SUBSTEP: "#B8DD73",
+    CRAFT_READY_SUBSTEP: LIGHT_GREEN,
 }
 
 HOVERING_TILE_COLOR = "#FFC800"
@@ -257,6 +289,11 @@ UI_RESEARCH_PROGRESS_BG_COL = "#300a4f"
 COMPUTER_DEBUG_COLOR = UI_RESEARCH_PROGRESS_COL
 UI_COMPUTER_DEBUG_INDICATOR_COLOR = "#ac05fa"
 
+POTENTIAL_DEBUG_COLOR = YELLOW_WARNING
+POTENTIAL_DEBUG_RED_MULT = 25
+UI_POTENTIAL_DEBUG_COLOR = (255, 80, 00)
+MOLD_SANITIZER_DEBUG_COLOR = "white"
+
 # ui alpha
 
 OPAQUE = 255
@@ -280,6 +317,11 @@ OPAQUE_INDICATOR_ALPHA = 220
 
 UI_ICON_BTN_ALPHA = 185
 UI_PAUSE_OVERLAY_ALPHA = 150
+
+POTENTIAL_BASE_ALPHA = 10
+POTENTIAL_ALPHA_MULT = 10
+POTENTIAL_MAX_ALPHA = 120
+MOLD_SANITIZER_DEBUG_ALPHA = 35
 
 # ui size
 
@@ -443,7 +485,23 @@ RESEARCH_TREE_LAYOUT = [
         ["auto_transport", "_next_"],
     ],
     [["better_chip", "_next_"]],
-    [["dummy", None]],
+    [
+        ["ease_of_movement", "_same_h_"],
+        ["mold_protection", "_same_h_"],
+    ],
+    [
+        ["pet_lamp", "_next_"],
+        ["mold_breaking", "_next_"],
+    ],
+    [["better_chip_2", "_next_"]],
+    [["titanium_begins", "_next_"]],
+    [
+        ["fast_movement", "_same_h_"],
+        ["titanium_mining", "_same_h_"],
+        ["titanium_smelting", None],
+        ["titanium_crafting", None],
+    ],
+    [["pet_collector", None], ["mold_harvesting", None]],
 ]
 RESEARCH_TREE_BIGGEST_VERTICAL_AMOUNT = 0
 for horizontal_layer in RESEARCH_TREE_LAYOUT:

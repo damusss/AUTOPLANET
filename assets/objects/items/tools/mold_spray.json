@@ -1,6 +1,6 @@
 {
-    "display_name": "Mold Spray",
-    "description": "Tool used to remove mold from buildings",
+    "display_name": "Mold Remover Spray",
+    "description": "Tool used to remove mold from buildings. Consumes one ammonia from your inventory per usage.",
     "stack_size": 1,
     "category": "tools",
     "create_data": {

@@ -1,0 +1,9 @@
+{
+    "display_name": "Ease of Movement",
+    "description": "NOTIMPLEMENTED",
+    "path_name": "Movement Path",
+    "required_chip": 2,
+    "required_nodes": ["better_chip"],
+    "unlocks": ["jetpack_1","fan"],
+    "cost": 100
+}

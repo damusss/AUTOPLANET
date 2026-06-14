@@ -1,0 +1,9 @@
+{
+    "display_name": "Collector Friend",
+    "description": "NOTIMPLEMENTED",
+    "path_name": "Pet Path",
+    "required_chip": 3,
+    "required_nodes": ["fast_movement"],
+    "unlocks": ["pet_collector"],
+    "cost": 150
+}

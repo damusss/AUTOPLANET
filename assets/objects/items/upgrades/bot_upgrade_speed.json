@@ -8,8 +8,7 @@
         "time_s": 4,
         "recipe": [
             ["diamond", 1],
-            ["thruster", 5],
-            ["remote_controller", 1]
+            ["thruster", 3]
         ]
     }
 }

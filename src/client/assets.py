@@ -71,10 +71,6 @@ class Assets:
         white.fill("white")
         self.white_tex = self.load_tex(white)
 
-        self.tile_not_solid_overlay = pygame.Surface(
-            (constants.TILE_PX, constants.TILE_PX), pygame.SRCALPHA
-        )
-        self.tile_not_solid_overlay.fill(constants.TILE_NOT_SOLID_COLOR_MULT)
         self.placeholder = self.load("placeholder.png")
         self.placeholder_tex = self.load_tex(self.placeholder)
 
@@ -159,6 +155,47 @@ class Assets:
                 self.tile_texs[tile] = self.placeholder_tex
                 self.tiles[tile] = placeholder
 
+        self.moldy_tile_overlay = self.load("tiles/effects/moldy.png").convert(
+            32, pygame.SRCALPHA
+        )
+        self.moldy_tile_grayscale_tex = self.load_tex(
+            pygame.transform.grayscale(self.moldy_tile_overlay)
+        )
+        self.moldy_tile_overlay.set_alpha(150)
+        self.moldy_tile_overlay_tex = self.load_tex(self.moldy_tile_overlay)
+
+        self.tile_not_solid_overlay = pygame.Surface(
+            (constants.TILE_PX, constants.TILE_PX), pygame.SRCALPHA
+        )
+        self.tile_not_solid_overlay.fill(constants.TILE_NOT_SOLID_COLOR_MULT)
+        self.tile_not_solid_overlay_tex = self.load_tex(self.tile_not_solid_overlay)
+        self.tile_not_solid_overlay_tex.blend_mode = pygame.BLENDMODE_MUL
+
+        self.sanitizer_tile_overlay = pygame.Surface(
+            (constants.TILE_PX, constants.TILE_PX), pygame.SRCALPHA
+        )
+        self.sanitizer_tile_overlay.fill(constants.MOLD_SANITIZER_DEBUG_COLOR)
+        self.sanitizer_tile_overlay.set_alpha(constants.MOLD_SANITIZER_DEBUG_ALPHA)
+        self.potential_red_overlay = pygame.Surface(
+            (constants.TILE_PX, constants.TILE_PX), pygame.SRCALPHA
+        )
+        self.potential_tile_overlays: dict[int, pygame.Surface] = {}
+        self.potential_tile_overlay_fill: pygame.Surface = None
+        for i in range(8 + 1):
+            overlay = pygame.Surface(
+                (constants.TILE_PX, constants.TILE_PX), pygame.SRCALPHA
+            )
+            pygame.draw.rect(
+                overlay,
+                constants.POTENTIAL_DEBUG_COLOR,
+                (0, 0, constants.TILE_PX, constants.TILE_PX),
+                i,
+            )
+            self.potential_tile_overlays[i * 2] = overlay
+            self.potential_tile_overlays[i * 2 - 1] = overlay
+            if i == 8:
+                self.potential_tile_overlay_fill = overlay
+
     def load_vegetation(self):
         self.vegetation: dict[str, pygame.Surface] = {}
         self.vegetation_texs: dict[str, Texture] = {}
@@ -194,7 +231,7 @@ class Assets:
                         building.size[1] * constants.TILE_PX,
                     ),
                 )
-                self.building_texs[building.name_id] = self.placeholder_tex
+                self.building_texs[building.name_id] = self.load_tex(self.placeholder)
             for state in building.states.values():
                 if state.default_image:
                     continue
@@ -213,7 +250,9 @@ class Assets:
                             building.size[1] * constants.TILE_PX,
                         ),
                     )
-                    self.building_texs[state.image_name] = self.placeholder_tex
+                    self.building_texs[state.image_name] = self.load_tex(
+                        self.placeholder
+                    )
 
     def load_items(self):
         self.items: dict[str, pygame.Surface] = {}
@@ -303,24 +342,17 @@ class Assets:
     """
 
     def load_energy_debug(self):
-        plant_r = BuildingOD.objects.energy_plant.energy_radius
-        transmitter_r = BuildingOD.objects.energy_transmitter.energy_radius
-        plant_surf = pygame.Surface((plant_r * 2, plant_r * 2), pygame.SRCALPHA)
-        transmitter_surf = pygame.Surface(
-            (transmitter_r * 2, transmitter_r * 2), pygame.SRCALPHA
-        )
-        pygame.draw.circle(plant_surf, "white", (plant_r, plant_r), plant_r)
-        pygame.draw.circle(
-            transmitter_surf, "white", (transmitter_r, transmitter_r), transmitter_r
-        )
-        self.energy_plant_debug_tex = self.load_tex(plant_surf)
-        self.energy_transmitter_debug_tex = self.load_tex(transmitter_surf)
-
         color = pygame.Color(constants.ENERGY_DEBUG_COLOR)
         color.a = constants.ENERGY_DEBUG_ALPHA
-        self.energy_plant_debug_tex.color = self.energy_transmitter_debug_tex.color = (
-            color
-        )
+
+        self.energy_debug_texs: dict[str, Texture] = {}
+        for building_od in [BuildingOD.objects.energy_plant, BuildingOD.objects.energy_transmitter, BuildingOD.objects.dev_energy_generator]:
+            radius = building_od.energy_radius
+            surf = pygame.Surface((radius*2, radius*2), pygame.SRCALPHA)
+            pygame.draw.circle(surf, "white", (radius, radius), radius)
+            tex = self.load_tex(surf)
+            tex.color = color
+            self.energy_debug_texs[building_od.name_id] = tex
 
     def load_tex(self, surf_or_file):
         if isinstance(surf_or_file, pygame.Surface):

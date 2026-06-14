@@ -3,5 +3,6 @@
     "description": "NOT IMPLEMENTED",
     "item_drop": [["diamond", 1]],
     "break_requirements": ["titanium_pickaxe"],
-    "break_time_s": 1.2
+    "break_time_s": 1.2,
+    "mold_can_infect": false
 }

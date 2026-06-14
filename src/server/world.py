@@ -1,3 +1,5 @@
+import typing
+
 import pygame
 
 from src import shared
@@ -9,11 +11,12 @@ from src.server import building as building_def
 from src.server import buildings
 from src.object_data import TileOD, BuildingOD, ItemOD, VegetationOD
 from src.server.drop import Drop
+from src.server.mold import MoldSystem
 from src.server.chunk import Chunk
 from src.server.player import Player
 from src.server.research import Research
 from src.server.energy import EnergyConn, EnergyPlant
-from src.server.building import Building, MovingBuilding
+from src.server.building import StaticBuilding, MovingBuilding
 
 
 class World:
@@ -29,11 +32,12 @@ class World:
         self.cumulative_pause_ticks = 0
         self.players: dict[int, Player] = {}
         self.chunks: dict[str, Chunk] = {}
-        self.buildings: dict[str, Building | MovingBuilding] = {}
+        self.buildings: dict[str, StaticBuilding | MovingBuilding] = {}
         self.refresh_queued_chunks = set()
         self.disrupt_alerted_buildings = set()
         self.disrupt_alerted_plants = set()
         self.research: Research = Research()
+        self.mold: MoldSystem = MoldSystem()
         timerc.add(constants.DISPLAY_FPS_COOLDOWN, self.display_fps)
         shared.time_get_ticks = self.get_ticks
         building_def.EnergyConn_t = EnergyConn
@@ -198,11 +202,22 @@ class World:
                 colliding.append(self.chunks[ckey])
         return colliding
 
+    def get_chunks_colliding_aligned_rect(self, rect: pygame.Rect) -> set[Chunk]:
+        colliding = set()
+        topleft_pos = shared.get_chunk_pos(rect.topleft)
+        bottomright_pos = shared.get_chunk_pos(rect.bottomright)
+        for cx in range(int(topleft_pos.x), int(bottomright_pos.x) + 1):
+            for cy in range(int(topleft_pos.y), int(bottomright_pos.y) + 1):
+                ckey = shared.get_chunk_key((cx, cy))
+                if ckey in self.chunks:
+                    colliding.add(self.chunks[ckey])
+        return colliding
+
     def drop(self, pos, item, amount):
-        raycast = self.raycast(pos, constants.RAYCASTFLAG_CHUNK)
-        if raycast is None:
+        chunk_key = shared.get_chunk_key(shared.get_chunk_pos(pos))
+        if chunk_key not in self.chunks:
             return
-        chunk = self.chunks[raycast.chunk_key]
+        chunk = self.chunks[chunk_key]
         drop = Drop(pos, chunk, item, amount)
         chunk.drops.append(drop)
 
@@ -244,7 +259,9 @@ class World:
             building.subscribed_client_players.append(player)
         building.refresh_interact()
 
-    def edit_bot_trajectory(self, bot: MovingBuilding, target: Building, kind: str):
+    def edit_bot_trajectory(
+        self, bot: MovingBuilding, target: StaticBuilding, kind: str
+    ):
         if bot.building_od != BuildingOD.objects.bot:
             return
         name = kind.removesuffix("put")
@@ -301,7 +318,9 @@ class World:
         building.on_destroy()
 
     def break_building(
-        self, building: Building | MovingBuilding, tool: ItemOD | None = None
+        self,
+        building: StaticBuilding | MovingBuilding,
+        tool: ItemOD | None | typing.Literal[False] = None,
     ):
         if not building.building_od.static:
             self.break_moving_building(building, tool)
@@ -320,7 +339,7 @@ class World:
         if tool == ItemOD.objects.recycler:
             for item, amount in building.building_od.item.create_data.recipe:
                 self.drop(shared.get_drop_random_pos(building.hitbox), item, amount)
-        else:
+        elif tool is not False:
             self.drop(
                 shared.get_drop_random_pos(building.hitbox),
                 building.building_od.item,
@@ -329,6 +348,7 @@ class World:
         building.chunk.refresh_pending = True
         building.on_destroy()
         building.chunk.refresh_pending = False
+        self.mold.on_destroyed_or_unsanitized(building)
         self.refresh_chunk(building.chunk)
         if building.building_od.floor:
             self.break_object_on_top(building.hitbox.center - pygame.Vector2(0, 1))
@@ -338,7 +358,7 @@ class World:
         if ray is not None:
             if ray.type == constants.RAYCAST_BUILDING:
                 if ray.data[0] in self.buildings:
-                    building: Building = self.buildings[ray.data[0]]
+                    building: StaticBuilding = self.buildings[ray.data[0]]
                     if building.require_floor:
                         self.break_building(building)
             elif ray.type == constants.RAYCAST_TILE:
@@ -364,7 +384,7 @@ class World:
     def break_tile(self, tile_data, chunk: Chunk, raycast: shared.RaycastHit):
         tile_data[1] = 0
         also_refresh = None
-        if len(tile_data) == 4 and constants.TILE_PLACED in tile_data[3]:
+        if len(tile_data) >= 4 and constants.TILE_PLACED in tile_data[-1]:
             chunk.tiles_mat[chunk.get_tile_index(raycast.tile_pos)] = None
             ray_bottom = self.raycast(
                 (
@@ -375,14 +395,14 @@ class World:
             )
             if ray_bottom is not None and ray_bottom.type == constants.RAYCAST_TILE:
                 if (
-                    len(ray_bottom.tile_data) == 4
-                    and constants.TILE_BACKGROUND_FLIP in ray_bottom.tile_data[3]
+                    len(ray_bottom.tile_data) >= 4
+                    and constants.TILE_BACKGROUND_FLIP in ray_bottom.tile_data[-1]
                 ):
                     ray_bottom.tile_data[0] = TileOD.objects.nylium_surface.uid
-                    if ray_bottom.tile_data[3] == constants.TILE_BACKGROUND_FLIP:
-                        ray_bottom.tile_data.pop(3)
+                    if ray_bottom.tile_data[-1] == constants.TILE_BACKGROUND_FLIP:
+                        ray_bottom.tile_data.pop(-1)
                     else:
-                        ray_bottom.tile_data[3] = constants.TILE_PLACED
+                        ray_bottom.tile_data[-1] = constants.TILE_PLACED
                     also_refresh = ray_bottom.chunk_key
         top_pos = None
         if raycast.tile_pos in chunk.tile_hitboxes_table:
@@ -426,6 +446,8 @@ class World:
                 return
 
     def break_raycast(self, raycast: shared.RaycastHit, tool: ItemOD | None = None):
+        if raycast is None:
+            return
         chunk = self.chunks[raycast.chunk_key]
         if raycast.type == constants.RAYCAST_TILE:
             tile_data = chunk.get_tile(raycast.tile_pos)
@@ -445,7 +467,7 @@ class World:
         topleft: pygame.Vector2,
     ):
         # check altitude
-        if building.altitude_range is not None and topleft.y not in range(
+        if building.altitude_range is not None and int(topleft.y) not in range(
             building.altitude_range[0], building.altitude_range[1]
         ):
             return constants.BUILDING_STATUS_WRONG_ALTITUDE
@@ -488,8 +510,11 @@ class World:
             return constants.BUILDING_STATUS_WRONG_FLOOR
         return constants.BUILDING_STATUS_AVAILABLE
 
-    def can_place_building(self, building_od: BuildingOD, pos, player: Player):
-        if player.pos.distance_to(pos) > constants.PLAYER_BUILD_RADIUS:
+    def can_place_building(self, building_od: BuildingOD, pos, player: Player | None):
+        if (
+            player is not None
+            and player.pos.distance_to(pos) > constants.PLAYER_BUILD_RADIUS
+        ):
             return constants.BUILDING_STATUS_TOO_FAR
         topleft = shared.get_building_topleft(pos, building_od.size)
         ret_valid_f = constants.BUILDING_STATUS_AVAILABLE
@@ -633,8 +658,15 @@ class World:
                     ray_bottom.tile_data[0] = TileOD.objects.nylium.uid
                     if len(ray_bottom.tile_data) == 3:
                         ray_bottom.tile_data.append(constants.TILE_BACKGROUND_FLIP)
-                    else:
-                        ray_bottom.tile_data[3] = constants.TILE_PLACED_BACKGROUND_FLIP
+                    elif len(ray_bottom.tile_data) == 4:
+                        if isinstance(ray_bottom.tile_data[3], str):
+                            ray_bottom.tile_data[3] = (
+                                constants.TILE_PLACED_BACKGROUND_FLIP
+                            )
+                        else:
+                            ray_bottom.tile_data.append(constants.TILE_BACKGROUND_FLIP)
+                    elif len(ray_bottom.tile_data) == 5:
+                        ray_bottom.tile_data[-1] = constants.TILE_PLACED_BACKGROUND_FLIP
                     also_refresh = ray_bottom.chunk_key
         if tile_data is not None:
             tile_data[0] = restore_uid
@@ -660,19 +692,23 @@ class World:
         building.on_place()
         return building
 
-    def place_building(
-        self, building_od: BuildingOD, pos, player: Player
-    ) -> Building | MovingBuilding | None:
+    def try_place_building(self, building_od: BuildingOD, pos, player: Player):
         status = self.can_place_building(building_od, pos, player)
         if status != constants.BUILDING_STATUS_AVAILABLE:
             return None
         if not player.inventory.has(building_od.item, 1):
             return None
         player.inventory.remove(building_od.item, 1)
-        ray = self.raycast(pos, constants.RAYCASTFLAG_CHUNK)
-        if ray is None:
+        self.place_building(building_od, pos)
+        return None
+
+    def place_building(
+        self, building_od: BuildingOD, pos
+    ) -> StaticBuilding | MovingBuilding | None:
+        chunk_key = shared.get_chunk_key(shared.get_chunk_pos(pos))
+        if chunk_key not in self.chunks:
             return None
-        chunk = self.chunks[ray.chunk_key]
+        chunk = self.chunks[chunk_key]
         if not building_od.static:
             return self.place_moving_building(building_od, pos, chunk)
         topleft = shared.get_building_topleft(pos, building_od.size)
@@ -680,7 +716,26 @@ class World:
             self.restore_tile(topleft, chunk, building_od)
             return None
         bid = self.get_building_id()
-        building = Building(bid, building_od, topleft, chunk)
+        mold_potential = mold_potential_count = mold_sanitizers = 0
+        ray_topleft = self.raycast(topleft + (0.5, 0.5), constants.RAYCASTFLAG_ALL)
+        if (
+            ray_topleft.type == constants.RAYCAST_TILE
+            and len(ray_topleft.tile_data) > 3
+            and isinstance(ray_topleft.tile_data[constants.MOLD_I], list)
+        ):
+            mold_data = ray_topleft.tile_data[constants.MOLD_I]
+            mold_potential = mold_data[constants.POTENTIAL_I]
+            mold_potential_count = mold_data[constants.POTENTIAL_COUNT_I]
+            mold_sanitizers = mold_data[constants.SANITIZERS_I]
+        building = StaticBuilding(
+            bid,
+            building_od,
+            topleft,
+            chunk,
+            mold_potential,
+            mold_potential_count,
+            mold_sanitizers,
+        )
         # if building_od.replace_tile:
         #    ray = self.raycast(building.hitbox.center, constants.RAYCASTFLAG_ALL)
         ##    if ray.type == constants.RAYCAST_TILE and ray.hitbox is None:
@@ -727,6 +782,7 @@ class World:
         self.buildings[building.id] = building
         chunk.refresh_pending = True
         building.on_place()
+        self.mold.on_placed_or_purged_or_sanitized(building)
         chunk.refresh_pending = False
         self.refresh_chunk(chunk)
         return building
@@ -737,10 +793,6 @@ class World:
         chunk_key = shared.get_chunk_key(chunk_pos)
         if chunk_key not in self.chunks:
             return None
-        if flag == constants.RAYCASTFLAG_CHUNK:
-            return shared.RaycastHit(
-                chunk_key, None, constants.RAYCAST_EMPTY, None, None, None, None
-            )
         chunk = self.chunks[chunk_key]
         tile_pos = (
             int(pos.x - chunk.world_topleft.x),
@@ -759,7 +811,7 @@ class World:
                         None,
                     )
             return None
-        if flag == constants.RAYCASTFLAG_INFO:
+        if constants.RAYCASTFLAG_INFO in flag:
             for moving_id in chunk.moving_building_ids:
                 if moving_id in self.buildings:
                     moving: MovingBuilding = self.buildings[moving_id]
@@ -800,7 +852,7 @@ class World:
                     None,
                     building.get_raycast_data(flag),
                 )
-        if flag == constants.RAYCASTFLAG_INFO:
+        if constants.RAYCASTFLAG_INFO in flag:
             for rel_x, rel_y, plant_uid, hitbox, *_ in chunk.vegetation:
                 if hitbox.collidepoint(pos):
                     return shared.RaycastHit(
@@ -812,11 +864,16 @@ class World:
                         None,
                         None,
                     )
-        if tile_pos in chunk.tile_hitboxes_table or flag == constants.RAYCASTFLAG_ALL:
+        if tile_pos in chunk.tile_hitboxes_table or constants.RAYCASTFLAG_ALL in flag:
             tile_data = chunk.get_tile(tile_pos)
+            hitbox = chunk.tile_hitboxes_table.get(tile_pos, None)
+            if hitbox is None and flag == constants.RAYCASTFLAG_ALL_INFO:
+                hitbox = pygame.FRect(0, 0, 1, 1).move_to(
+                    topleft=chunk.world_topleft + tile_pos
+                )
             return shared.RaycastHit(
                 chunk_key,
-                chunk.tile_hitboxes_table.get(tile_pos, None),
+                hitbox,
                 constants.RAYCAST_TILE
                 if tile_data is not None
                 else constants.RAYCAST_EMPTY,
@@ -855,8 +912,6 @@ class World:
                 ],
                 start=[],
             )
-            player.raycast = self.raycast(
-                player.client_mouse_pos, constants.RAYCASTFLAG_INFO
-            )
+            player.raycast = self.raycast(player.client_mouse_pos, player.raycast_flag)
             player.frame(rects, drops_data, moving_data)
         timerc.frame()

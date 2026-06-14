@@ -139,9 +139,9 @@ timerc_resume(PyObject *self, PyObject *null)
 static PyObject *
 timerc_frame(PyObject *self, PyObject *null)
 {
-    int len = global_timers->len;
+    int i = 0;
     double now = get_game_time();
-    for (int i = 0; i < len; i++)
+    while (i < global_timers->len)
     {
         if ((now - global_timers->timers[i].start) >= global_timers->timers[i].cooldown)
         {
@@ -155,18 +155,22 @@ timerc_frame(PyObject *self, PyObject *null)
                 if (Py_IsNone(result))
                 {
                     list_pop(global_timers, i);
+                    Py_DECREF(result);
                 }
                 else
                 {
                     Py_XDECREF(global_timers->timers[i].callback);
                     global_timers->timers[i].start = now;
                     global_timers->timers[i].callback = result;
+                    i++;
                 }
             }
             else
             {
                 list_pop(global_timers, i);
             }
+        } else {
+            i++;
         }
     }
     Py_RETURN_NONE;

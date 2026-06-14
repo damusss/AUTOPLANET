@@ -4,6 +4,7 @@ import typing
 
 import pygame
 
+from src import shared
 from src import constants
 from src.server import god
 from src.object_data import ItemOD
@@ -44,14 +45,14 @@ class Drop:
 
     def frame(self):
         if god.world.get_ticks() - self.last_raycast >= 100:
-            raycast = god.world.raycast(self.pos, constants.RAYCASTFLAG_CHUNK)
-            if raycast:
-                if raycast.chunk_key != self.chunk.chunk_key:
+            chunk_key = shared.get_chunk_key(shared.get_chunk_pos(self.pos))
+            if chunk_key in god.world.chunks:
+                if chunk_key != self.chunk.chunk_key:
                     try:
                         self.chunk.drops.remove(self)
                     except ValueError:
                         ...
-                    new = god.world.chunks[raycast.chunk_key]
+                    new = god.world.chunks[chunk_key]
                     new.drops.append(self)
                     self.chunk = new
         self.vel += constants.GRAVITY * god.dt

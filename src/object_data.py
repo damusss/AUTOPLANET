@@ -182,12 +182,13 @@ class ObjectData:
 
 
 class TileOD(ObjectData, type_name="Tile"):
-    DEFAULTS = {"miner_time_s": 0}
+    DEFAULTS = {"miner_time_s": 0, "mold_can_infect": True}
 
     item_drop: list[tuple["ItemOD", int]]
     break_requirements: list["ItemOD"]
     break_time_s: float
     miner_time_s: float
+    mold_can_infect: bool
 
     def setup(self):
         if self.miner_time_s == 0:
@@ -282,7 +283,7 @@ class BuildingStateData:
 class BuildingOD(ObjectData, type_name="Building"):
     DEFAULTS = {
         "restore_tile": None,
-        "break_requirements": ["pickaxe", "titanium_pickaxe", "recycler"],
+        "break_requirements": ["pickaxe", "titanium_pickaxe", "recycler", "mold_spray"],
         "break_time_s": 0,
         "static": True,
         "description": "",

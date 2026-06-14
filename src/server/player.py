@@ -13,7 +13,7 @@ from src.server.inventory import Inventory
 
 if typing.TYPE_CHECKING:
     from src.server.server import ClientInterface
-    from src.server.building import Building, MovingBuilding
+    from src.server.building import StaticBuilding, MovingBuilding
 
 
 class Player:
@@ -52,7 +52,7 @@ class Player:
         self.client_mouse_pressing = False
         self.client_building_preview = None
         self.client_building_preview_clear_after = 1
-        self.client_subscribed_building: "Building|MovingBuilding|None" = None
+        self.client_subscribed_building: "StaticBuilding|MovingBuilding|None" = None
 
     @property
     def hitbox(self):
@@ -68,6 +68,15 @@ class Player:
     @property
     def break_mult(self):
         return constants.REITERATE_BREAK_TIME_MULT if (self.break_count > 0) else 1
+
+    @property
+    def raycast_flag(self):
+        if self.client_building_preview is not None:
+            return constants.RAYCASTFLAG_INFO
+        hand_slot = self.inventory.slots[constants.INVENTORY_HAND_I]
+        if not hand_slot.empty and hand_slot.item == ItemOD.objects.mold_spray:
+            return constants.RAYCASTFLAG_ALL_INFO
+        return constants.RAYCASTFLAG_INFO
 
     def damage(self, damage):
         self.health = pygame.math.clamp(
@@ -251,11 +260,25 @@ class Player:
                     god.world.get_ticks() - self.break_start_time
                     >= self.break_data.object_data.break_time_s * 1000 * self.break_mult
                 ):
-                    god.world.break_raycast(
-                        self.break_data,
-                        self.inventory.slots[constants.INVENTORY_HAND_I].item,
-                    )
-                    self.break_count += 1
+                    hand_slot = self.inventory.slots[constants.INVENTORY_HAND_I]
+                    if (
+                        not hand_slot.empty
+                        and hand_slot.item == ItemOD.objects.mold_spray
+                    ):
+                        if self.inventory.has(
+                            ItemOD.objects.ammonia, constants.MOLD_SPRAY_CONSUME_AMOUNT
+                        ):
+                            if god.world.mold.purge_infection(self.raycast):
+                                self.inventory.remove(
+                                    ItemOD.objects.ammonia,
+                                    constants.MOLD_SPRAY_CONSUME_AMOUNT,
+                                )
+                    else:
+                        god.world.break_raycast(
+                            self.break_data,
+                            hand_slot.item,
+                        )
+                        self.break_count += 1
                     self.client.conn.mail(
                         constants.MAIL_BREAK_START, time=None, mult=None
                     )

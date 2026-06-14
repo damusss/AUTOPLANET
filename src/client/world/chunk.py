@@ -7,6 +7,7 @@ from src import constants
 from src.client import god
 from src.object_data import BigStar, BlackHole, TileOD, BuildingOD, VegetationOD
 from src.client.rendering import (
+    QuadsMesh,
     RenderingLayer,
     MeshRenderingLayer,
     TextureRenderingLayer,
@@ -17,31 +18,6 @@ if constants.NEW_RENDER:
     from pygame._render import Texture, GeometryMesh
 else:
     from pygame._sdl2 import Texture
-
-
-class QuadsMesh:
-    def __init__(self):
-        self.vertices = []
-        self.indices = []
-        self.quad_count = 0
-
-    def add(self, topleft, size, color):
-        topleft = pygame.Vector2(topleft)
-        self.vertices += [
-            (topleft, color, (0, 0)),
-            ((topleft.x + size, topleft.y), color, (1, 0)),
-            (topleft + pygame.Vector2(size, size), color, (1, 1)),
-            ((topleft.x, topleft.y + size), color, (0, 1)),
-        ]
-        self.indices += [
-            self.quad_count + 0,
-            self.quad_count + 1,
-            self.quad_count + 2,
-            self.quad_count + 2,
-            self.quad_count + 3,
-            self.quad_count + 0,
-        ]
-        self.quad_count += 4
 
 
 class LightData:
@@ -80,11 +56,15 @@ class BuildingDataHolder:
 
     @property
     def has_energy(self) -> bool:
-        return self.data[5]
+        return bool(self.data[5])
+
+    @property
+    def moldy(self) -> bool:
+        return bool(self.data[6])
 
     @property
     def extra(self) -> dict | list | None:
-        return self.data[6] if len(self.data) >= 7 else None
+        return self.data[7] if len(self.data) >= 8 else None
 
 
 class Chunk:
@@ -115,6 +95,8 @@ class Chunk:
 
         self.tile_hitboxes = {}
         self.tiles_texture: Texture | None = None
+        self.potential_debug_texture: Texture | None = None
+        self.sanitizer_debug_texture: Texture | None = None
         self.vegetation_texture: Texture | None = None
         self.static_buildings_texture: Texture | None = None
 
@@ -273,6 +255,8 @@ class Chunk:
     def render_tiles(self):
         surf_w = constants.TILE_PX * constants.CHUNK_SIZE
         surface = pygame.Surface((surf_w, surf_w), pygame.SRCALPHA)
+        potential_surface = None
+        sanitizer_surface = None
         at_least_one = False
         for cx in range(constants.CHUNK_SIZE):
             for cy in range(constants.CHUNK_SIZE):
@@ -281,10 +265,63 @@ class Chunk:
                     at_least_one = True
                     tile_uid = tile[0]
                     tile_od = TileOD.get(tile_uid)
+                    blit_pos = (cx * constants.TILE_PX, cy * constants.TILE_PX)
                     surface.blit(
                         god.assets.tiles[tile_od.name_id],
-                        (cx * constants.TILE_PX, cy * constants.TILE_PX),
+                        blit_pos,
                     )
+                    potential = potential_scaled = potential_count = sanitizers = 0
+                    moldy = False
+                    if len(tile) > 3 and isinstance(tile[constants.MOLD_I], list):
+                        potential_count = tile[constants.MOLD_I][
+                            constants.POTENTIAL_COUNT_I
+                        ]
+                        potential = tile[constants.MOLD_I][constants.POTENTIAL_I]
+                        if potential_count != 0:
+                            potential_scaled = potential / potential_count
+                        else:
+                            potential_scaled = potential
+                        moldy = (
+                            tile[constants.MOLD_I][constants.MOLDY_I] == constants.MOLDY
+                        )
+                        sanitizers = tile[constants.MOLD_I][constants.SANITIZERS_I]
+                    if potential > 0:
+                        if potential_surface is None:
+                            potential_surface = pygame.Surface(
+                                surface.size, pygame.SRCALPHA
+                            )
+                        potential_overlay = god.assets.potential_tile_overlays.get(
+                            potential_count, god.assets.potential_tile_overlay_fill
+                        )
+                        potential_overlay.set_alpha(
+                            min(
+                                constants.POTENTIAL_MAX_ALPHA,
+                                constants.POTENTIAL_BASE_ALPHA
+                                + potential_scaled * constants.POTENTIAL_ALPHA_MULT,
+                            )
+                        )
+                        potential_surface.blit(potential_overlay, blit_pos)
+                        red_sub = min(
+                            255, potential_scaled * constants.POTENTIAL_DEBUG_RED_MULT
+                        )
+                        potential_surface.fill(
+                            (0, red_sub, 0, 0),
+                            (blit_pos, (constants.TILE_PX, constants.TILE_PX)),
+                            special_flags=pygame.BLEND_RGBA_SUB,
+                        )
+                    if sanitizers > 0:
+                        if sanitizer_surface is None:
+                            sanitizer_surface = pygame.Surface(
+                                surface.size, pygame.SRCALPHA
+                            )
+                        sanitizer_surface.blit(
+                            god.assets.sanitizer_tile_overlay, blit_pos
+                        )
+                    if moldy:
+                        surface.blit(
+                            god.assets.moldy_tile_overlay,
+                            blit_pos,
+                        )
                     if tile[1]:
                         hitbox = pygame.FRect(
                             self.world_topleft.x + cx, self.world_topleft.y + cy, 1, 1
@@ -293,11 +330,19 @@ class Chunk:
                     else:
                         surface.blit(
                             god.assets.tile_not_solid_overlay,
-                            (cx * constants.TILE_PX, cy * constants.TILE_PX),
+                            blit_pos,
                             special_flags=pygame.BLEND_RGBA_MULT,
                         )
         if at_least_one:
             self.tiles_texture = Texture.from_surface(god.windowing.renderer, surface)
+            if potential_surface is not None:
+                self.potential_debug_texture = Texture.from_surface(
+                    god.windowing.renderer, potential_surface
+                )
+            if sanitizer_surface is not None:
+                self.sanitizer_debug_texture = Texture.from_surface(
+                    god.windowing.renderer, sanitizer_surface
+                )
             self.layers["tiles"] = TextureRenderingLayer(
                 self.tiles_texture, self.world_rect, None
             )
@@ -313,6 +358,13 @@ class Chunk:
             rel_x = bdata.topleft_x - self.world_topleft.x + padding
             rel_y = bdata.topleft_y - self.world_topleft.y + padding
             surface.blit(image, (rel_x * constants.TILE_PX, rel_y * constants.TILE_PX))
+            if bdata.moldy:
+                mold_overlay = pygame.transform.scale(
+                    god.assets.moldy_tile_overlay, image.size
+                )
+                surface.blit(
+                    mold_overlay, (rel_x * constants.TILE_PX, rel_y * constants.TILE_PX)
+                )
             if (
                 bdata.extra is not None
                 and bdata.building_od.name_id
@@ -365,6 +417,8 @@ class Chunk:
     def unload(self):
         self.loaded = False
         self.tiles_texture = None
+        self.potential_debug_texture = None
+        self.sanitizer_debug_texture = None
         self.static_buildings_texture = None
         self.special_building_renderers = []
         self.vegetation_texture = None

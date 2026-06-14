@@ -34,8 +34,12 @@ class RaycastInfoUI:
         if raycast.object_data is not None:
             bottom = self.render_main(bottom, raycast, col_w, cs, self.b, self.b * 2)
         if raycast.type == constants.RAYCAST_TILE:
-            if len(raycast.object_data.item_drop) > 0:
+            if len(raycast.object_data.item_drop) > 0 and raycast.object_data.break_time_s > 0:
                 bottom = self.render_drops(
+                    bottom, raycast, col_w, cs, self.b, self.b * 2
+                )
+            if raycast.tile_data[2] > 0:
+                bottom = self.render_ore_amount(
                     bottom, raycast, col_w, cs, self.b, self.b * 2
                 )
             bottom = self.render_object_pos(
@@ -354,8 +358,8 @@ class RaycastInfoUI:
         status = constants.BUILDING_STATUS_MESSAGES[god.player.building_available]
         if god.player.building_available == constants.BUILDING_STATUS_WRONG_ALTITUDE:
             status = status.replace(
-                "<r1>", god.player.building_preview.altitude_range[0]
-            ).replace("<r2>", god.player.building_preview.altitude_range[1])
+                "<r1>", str(-god.player.building_preview.altitude_range[0])
+            ).replace("<r2>", str(-god.player.building_preview.altitude_range[1]))
         elif (
             god.player.building_available
             == constants.BUILDING_STATUS_MISSING_VEGETATION
@@ -734,10 +738,49 @@ class RaycastInfoUI:
             tex.draw(None, rect)
         return box.bottom
 
+    def render_ore_amount(self, top, raycast: shared.RaycastHit, col_w, cs, bb, b):
+        content_w = col_w - b * 2
+        text_h = content_w * constants.UI_RAYCAST_INFO_SUBTITLE_H_MULT
+        box = pygame.Rect(god.windowing.width - bb - col_w, top + bb, col_w, bb)
+        ore_tex, ore_rect = god.assets.font.get_texture_and_rect(
+            f"Ore Amount: {raycast.tile_data[2]}", "white", text_h
+        )
+        ore_rect = ore_rect.move_to(
+            midtop=(box.centerx, max(box.bottom, box.top + cs - ore_rect.h / 2))
+        )
+        box.h += ore_rect.h + bb
+        render_panel_bg(box, cs)
+        ore_tex.draw(None, ore_rect)
+        return box.bottom
+
     def render_object_pos(self, top, raycast: shared.RaycastHit, col_w, cs, bb, b):
         too_far = god.player.pos.distance_to(raycast.hitbox.center) > (
             constants.PLAYER_REACH_RADIUS
         )
+        moldy = False
+        sanitized = False
+        moldy_color = "white"
+        if (
+            raycast.type == constants.RAYCAST_TILE
+            and len(raycast.tile_data) > 3
+            and isinstance(raycast.tile_data[constants.MOLD_I], list)
+        ):
+            if (
+                raycast.tile_data[constants.MOLD_I][constants.MOLDY_I]
+                == constants.MOLDY
+            ):
+                moldy = True
+            if (
+                raycast.tile_data[constants.MOLD_I][constants.SANITIZERS_I] > 0
+                and raycast.object_data.mold_can_infect
+            ):
+                sanitized = True
+        elif raycast.type == constants.RAYCAST_BUILDING:
+            if len(raycast.data) >= 4 and raycast.data[3]:
+                moldy = True
+                moldy_color = constants.RED_BAD
+            if len(raycast.data) >= 4 and raycast.data[4]:
+                sanitized = True
         content_w = col_w - b * 2
         split = raycast.chunk_key.split(";")
         cpos = (int(split[0]), int(split[1]))
@@ -752,7 +795,7 @@ class RaycastInfoUI:
             god.windowing.width - bb - col_w,
             top + bb,
             col_w,
-            b * 2 + text_rect.h * (too_far + 1),
+            b * 2 + text_rect.h * (1 + too_far + moldy + sanitized),
         )
         render_panel_bg(box, cs)
         if too_far:
@@ -760,22 +803,44 @@ class RaycastInfoUI:
                 "Too far to break", constants.RED_BAD, text_h
             )
             far_tex.draw(None, far_rect.move_to(midtop=(box.centerx, box.top + b)))
+        text_rect = text_rect.move_to(
+            midtop=(
+                box.centerx,
+                box.top + b + text_rect.h * too_far,
+            )
+        )
         text_tex.draw(
             None,
-            text_rect.move_to(
-                midtop=(
-                    box.centerx,
-                    box.top + b + text_rect.h * too_far,
-                )
-            ),
+            text_rect,
         )
+        bottom = text_rect.bottom
+        if moldy:
+            mold_tex, mold_rect = god.assets.font.get_texture_and_rect(
+                "Moldy", moldy_color, text_h
+            )
+            mold_rect = mold_rect.move_to(midtop=(text_rect.centerx, bottom))
+            mold_tex.draw(
+                None,
+                mold_rect,
+            )
+            bottom = mold_rect.bottom
+        if sanitized:
+            sanitize_tex, sanitize_rect = god.assets.font.get_texture_and_rect(
+                "Inside mold barrier", constants.LIGHT_GREEN, text_h
+            )
+            sanitize_tex.draw(
+                None, sanitize_rect.move_to(midtop=(text_rect.centerx, bottom))
+            )
         return box.bottom
 
     def render_main(self, bottom, raycast: shared.RaycastHit, col_w, cs, bb, b):
         content_w = col_w - b * 2
         title_h = content_w * constants.UI_RAYCAST_INFO_TITLE_H_MULT
         title_tex, title_rect = god.assets.font.get_texture_and_rect(
-            raycast.object_data.display_name, "white", title_h, content_w
+            raycast.object_data.display_name,
+            "white",
+            title_h,
+            content_w,
         )
         descr_h = title_h * constants.UI_RAYCAST_INFO_DESCR_MULT
         descr_tex, descr_rect = god.assets.font.get_texture_and_rect(
@@ -799,8 +864,20 @@ class RaycastInfoUI:
         title_tex.draw(None, title_rect)
 
         object_tex = None
+        overlay_tex = None
+        overlay_overlay_tex = None
         if raycast.type == constants.RAYCAST_TILE:
             object_tex = god.assets.tile_texs[raycast.object_data.name_id]
+            if len(raycast.tile_data) > 3 and isinstance(
+                raycast.tile_data[constants.MOLD_I], list
+            ):
+                if (
+                    raycast.tile_data[constants.MOLD_I][constants.MOLDY_I]
+                    == constants.MOLDY
+                ):
+                    overlay_tex = god.assets.moldy_tile_overlay_tex
+            if raycast.tile_data[1] == 0:
+                overlay_overlay_tex = god.assets.tile_not_solid_overlay_tex
         elif raycast.type in [constants.RAYCAST_DROP, constants.RAYCAST_UI_ITEM]:
             object_tex = god.assets.item_texs[raycast.object_data.name_id]
         elif raycast.type == constants.RAYCAST_BUILDING:
@@ -808,6 +885,8 @@ class RaycastInfoUI:
             if not state.raycast_can_use:
                 state = raycast.object_data.states["default_image"]
             object_tex = god.assets.building_texs[state.image_name]
+            if len(raycast.data) >= 4 and raycast.data[3]:  # moldy
+                overlay_tex = god.assets.moldy_tile_overlay_tex
         elif raycast.type == constants.RAYCAST_VEGETATION:
             object_tex = god.assets.vegetation_texs[raycast.object_data.name_id]
         image_rect = pygame.Rect(
@@ -818,6 +897,10 @@ class RaycastInfoUI:
         )
         if object_tex:
             object_tex.draw(None, image_rect)
+        if overlay_tex:
+            overlay_tex.draw(None, image_rect)
+        if overlay_overlay_tex:
+            overlay_overlay_tex.draw(None, image_rect)
 
         descr_tex.draw(
             None, descr_rect.move_to(midtop=(image_rect.centerx, image_rect.bottom + b))

@@ -286,24 +286,52 @@ class ScreenUI:
 
     def render_debug_indicators(self, left):
         size = god.windowing.height * constants.UI_DEBUG_INDICATORS_H_MULT
-        for item_name, active, key_num, color, alpha_boost in (
+        for item_name, active, key_num, color, alpha_boost, replace_tex in (
             (
                 "energy_transmitter",
                 god.rendering.energy_debug,
                 1,
                 constants.ENERGY_DEBUG_COLOR,
                 0,
+                None,
             ),
-            ("bot", god.rendering.trajectory_debug, 2, constants.TRAJECTORY_COLOR, 0),
+            (
+                "bot",
+                god.rendering.trajectory_debug,
+                2,
+                constants.TRAJECTORY_COLOR,
+                0,
+                None,
+            ),
             (
                 "laboratory",
                 god.rendering.computer_debug,
                 3,
                 constants.UI_COMPUTER_DEBUG_INDICATOR_COLOR,
                 35,
+                None,
+            ),
+            (
+                "",
+                god.rendering.potential_debug,
+                4,
+                constants.UI_POTENTIAL_DEBUG_COLOR,
+                10,
+                god.assets.moldy_tile_grayscale_tex,
+            ),
+            (
+                "mold_sanitizer",
+                god.rendering.sanitizer_debug or god.rendering.auto_sanitizer_debug,
+                5,
+                constants.MOLD_SANITIZER_DEBUG_COLOR,
+                0,
+                None,
             ),
         ):
-            tex = god.assets.building_preview_texs[item_name]
+            if replace_tex:
+                tex = replace_tex
+            else:
+                tex = god.assets.building_preview_texs[item_name]
             tex.alpha = (
                 constants.OPAQUE_INDICATOR_ALPHA
                 if active

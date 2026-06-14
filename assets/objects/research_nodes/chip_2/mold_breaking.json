@@ -1,0 +1,9 @@
+{
+    "display_name": "Deep Exploring",
+    "description": "NOTIMPLEMENTED",
+    "path_name": "Mold Fighting Path",
+    "required_chip": 2,
+    "required_nodes": ["mold_protection"],
+    "unlocks": ["mold_miner"],
+    "cost": 50
+}

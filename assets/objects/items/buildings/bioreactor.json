@@ -1,0 +1,16 @@
+{
+    "display_name": "Mold Reactor",
+    "description": "",
+    "stack_size": "default_building",
+    "create_data": {
+        "type": "builder",
+        "time_s": 3,
+        "recipe": [
+            ["titanium_plate", 10],
+            ["diamond", 4],
+            ["glass", 5],
+            ["copper_pipe", 4],
+            ["cables", 5]
+        ]
+    }
+}

@@ -1,11 +1,11 @@
 from src import constants
 from src.shared import Slot
 from src.object_data import ItemOD
-from src.server.building import BuildingExt
+from src.server.building import StaticBuildingExt
 from src.server.inventory import BuildingInventory
 
 
-class Storage(BuildingExt, name_id="storage"):
+class Storage(StaticBuildingExt, name_id="storage"):
     def init(self):
         self.inventory = BuildingInventory(self)
         for i in range(constants.INVENTORY_ROWS * constants.INVENTORY_COLS):
@@ -14,7 +14,7 @@ class Storage(BuildingExt, name_id="storage"):
         self.inventories["out"] = self.inventory
 
 
-class Hopper(BuildingExt, name_id="hopper"):
+class Hopper(StaticBuildingExt, name_id="hopper"):
     def init(self):
         self.slot = Slot(None, 0, None, 0)
         self.inventory = BuildingInventory(self, self.slot)

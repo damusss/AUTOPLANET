@@ -1,0 +1,9 @@
+{
+    "display_name": "Titanium Building",
+    "description": "NOTIMPLEMENTED",
+    "path_name": "Titanium Path",
+    "required_chip": 3,
+    "required_nodes": ["titanium_begins"],
+    "unlocks": ["builder"],
+    "cost": 150
+}

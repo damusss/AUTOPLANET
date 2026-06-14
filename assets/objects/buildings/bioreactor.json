@@ -1,0 +1,20 @@
+{
+    "size": [3, 3],
+    "need_energy": true,
+    "floor_whitelist": ["titanium_platform"],
+    "energy_radius": 30,
+    "energy_endpoint_type": "plant",
+    "states": {
+        "on": {
+            "default_image": true,
+            "light": {
+                "radius": 15,
+                "intensity": 200,
+                "color": "#68cc68"
+            }
+        },
+        "off": {
+            "default": true
+        }
+    }
+}

@@ -1,0 +1,9 @@
+{
+    "display_name": "Light Friend",
+    "description": "NOTIMPLEMENTED",
+    "path_name": "Pet Path",
+    "required_chip": 2,
+    "required_nodes": ["ease_of_movement"],
+    "unlocks": ["pet_lamp"],
+    "cost": 120
+}

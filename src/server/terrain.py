@@ -100,7 +100,7 @@ ISLANDS_PAUSE_HEIGHT = 11
 SURFACE_LAYER_HEIGHT = 6
 SURFACE_HEIGHT_MULT = 30
 
-UNDERGROUND_HEIGHT = 150
+UNDERGROUND_HEIGHT = 120
 MOLD_LAYER_HEIGHT = 10
 DEEP_UNDERGROUND_HEIGHT = 100
 
@@ -185,11 +185,13 @@ def underground_biome_handler(rel_y, wx, abs_y):
             plant_data = [wx, abs_y, VegetationOD.objects.cave_bulb]
     if solid == 1 and MOLD.is_here_block(wx, rel_y):
         tile_type = TileOD.objects.mold_patch
+    if wx == 0:  # TEMP
+        solid = 0
     return [tile_type.uid, solid, ore_amount], plant_data
 
 
 def mold_layer_biome_handler(_rel_y, _wx, _abs_y):
-    return [TileOD.objects.mold_patch.uid, 1, 1000], None
+    return [TileOD.objects.mold_patch.uid, 1, 0], None
 
 
 def deep_underground_biome_handler(_rel_y, _wx, _abs_y):

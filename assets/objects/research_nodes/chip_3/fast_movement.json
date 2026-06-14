@@ -1,0 +1,9 @@
+{
+    "display_name": "Fast Movement",
+    "description": "NOTIMPLEMENTED",
+    "path_name": "Movement Path",
+    "required_chip": 3,
+    "required_nodes": ["titanium_begins"],
+    "unlocks": ["jetpack_2", "bot_upgrade_speed"],
+    "cost": 150
+}

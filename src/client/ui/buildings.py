@@ -44,6 +44,21 @@ class StorageInterface(BuildingInterface, name_id="storage"):
         return hovering_slot
 
 
+class MoldSanitizerInterface(BuildingInterface, name_id="mold_sanitizer"):
+    def render(self, b, cont):
+        self.render_title(cont, b)
+        slot_size = god.ui.inventory.slot_size * 2
+        slot_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(center=cont.center)
+        slot = self.inventories["in"][0]
+        return god.ui.inventory.render_slot(
+            slot_rect,
+            slot,
+            None,
+            "ammonia",
+            ghost=god.ui.inventory.floating_slot.source_slot is slot,
+        )
+
+
 class HopperInterface(BuildingInterface, name_id="hopper"):
     def __init__(self):
         super().__init__()
@@ -524,6 +539,118 @@ class MinerInterface(BuildingInterface, name_id="miner"):
         )
         self.render_icon_progress(
             icon, icon_rect, self.working, self.work_start_time, self.work_time
+        )
+        return hovering
+
+
+class MoldHarvesterInterface(BuildingInterface, name_id="mold_harvester"):
+    def __init__(self):
+        super().__init__()
+        self.working = False
+        self.work_start_time = 0
+        self.work_time = 0
+
+    def refresh_data(self, base_data, building_data):
+        self.refresh_inventories_data(base_data, building_data)
+        self.working = building_data["working"]
+        self.work_start_time = shared.eval_delta(building_data["work_start_time"])
+        self.work_time = building_data["work_time"]
+
+    def render(self, b, cont):
+        self.render_title(cont, b)
+        slot_size = god.ui.inventory.slot_size * 2
+        in_slot_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            midbottom=(cont.centerx, cont.centery - slot_size / 2 - b)
+        )
+        slot_rect_1 = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            midright=(cont.centerx - b, cont.centery)
+        )
+        slot_rect_2 = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            midleft=(cont.centerx + b, cont.centery)
+        )
+        in_slot = self.inventories["in"][0]
+        slot_1 = self.inventories["out"][0]
+        slot_2 = self.inventories["out"][1]
+        hovering = None
+        hovering = god.ui.inventory.render_slot(
+            in_slot_rect,
+            in_slot,
+            hovering,
+            "ammonia",
+            ghost=god.ui.inventory.floating_slot.source_slot is in_slot,
+        )
+        hovering = god.ui.inventory.render_slot(
+            slot_rect_1,
+            slot_1,
+            hovering,
+            None,
+            ghost=god.ui.inventory.floating_slot.source_slot is slot_1,
+        )
+        hovering = god.ui.inventory.render_slot(
+            slot_rect_2,
+            slot_2,
+            hovering,
+            None,
+            ghost=god.ui.inventory.floating_slot.source_slot is slot_2,
+        )
+        icon = god.assets.icons_texs["drill"]
+        icon_size = god.ui.inventory.slot_size * 2
+        icon_rect = pygame.Rect(0, 0, icon_size, icon_size).move_to(
+            midtop=(cont.centerx, cont.centery + b * 2 + slot_size / 2)
+        )
+        self.render_icon_progress(
+            icon, icon_rect, self.working, self.work_start_time, self.work_time
+        )
+        return hovering
+
+
+class MoldMinerInterface(BuildingInterface, name_id="mold_miner"):
+    def __init__(self):
+        super().__init__()
+        self.working = False
+        self.work_start_time = 0
+        self.work_time = 0
+        self.progress = 0
+
+    def refresh_data(self, base_data, building_data):
+        self.refresh_inventories_data(base_data, building_data)
+        self.working = building_data["working"]
+        self.work_start_time = shared.eval_delta(building_data["work_start_time"])
+        self.work_time = building_data["work_time"]
+        self.progress = building_data["progress"]
+
+    def render(self, b, cont):
+        self.render_title(cont, b)
+        slot_size = god.ui.inventory.slot_size * 2
+        slot_rect = pygame.Rect(0, 0, slot_size, slot_size).move_to(
+            midbottom=(cont.centerx, cont.centery - b)
+        )
+        slot = self.inventories["in"][0]
+        hovering = None
+        hovering = god.ui.inventory.render_slot(
+            slot_rect,
+            slot,
+            hovering,
+            "ammonia",
+            ghost=god.ui.inventory.floating_slot.source_slot is slot,
+        )
+        icon = god.assets.icons_texs["drill"]
+        icon_size = god.ui.inventory.slot_size * 2
+        icon_rect = pygame.Rect(0, 0, icon_size, icon_size).move_to(
+            midtop=(cont.centerx, cont.centery + b * 2 + slot_size / 2)
+        )
+        progress = self.progress
+        if self.working:
+            progress += (
+                (god.world.get_ticks() - self.work_start_time) / 1000 / self.work_time
+            )
+        self.render_icon_progress(
+            icon,
+            icon_rect,
+            True,
+            0,
+            1,
+            mult_override=progress / constants.MOLD_BREAKER_CONSUME_AMOUNT,
         )
         return hovering
 

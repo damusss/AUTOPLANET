@@ -1,0 +1,19 @@
+{
+    "size": [1, 1],
+    "floor": true,
+    "need_energy": false,
+    "interface": false,
+    "energy_radius": 40,
+    "energy_endpoint_type": "plant",
+    "states": {
+        "on": {
+            "default": true,
+            "default_image": true,
+            "light": {
+                "radius": 10,
+                "intensity": 160,
+                "color": "#ffffff"
+            }
+        }
+    }
+}

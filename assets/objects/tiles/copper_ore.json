@@ -2,7 +2,7 @@
     "display_name": "Copper Ore",
     "description": "NOT IMPLEMENTED",
     "item_drop": [["copper_ore", 1]],
-    "break_requirements": ["pickaxe", "titanium_pickaxe"],
+    "break_requirements": ["pickaxe", "titanium_pickaxe", "mold_spray"],
     "break_time_s": 0.7,
     "miner_time_s": 1.3
 }

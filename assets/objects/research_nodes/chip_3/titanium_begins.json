@@ -1,0 +1,9 @@
+{
+    "display_name": "Titanium Begins",
+    "description": "NOTIMPLEMENTED",
+    "path_name": "Titanium Path",
+    "required_chip": 3,
+    "required_nodes": ["better_chip_2"],
+    "unlocks": ["titanium_bolt", "titanium_plate", "titanium_pickaxe", "titanium_platform"],
+    "cost": 150
+}

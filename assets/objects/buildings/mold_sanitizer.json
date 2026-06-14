@@ -1,4 +1,15 @@
 {
-    "size": [1, 1],
-    "inventory_kind": "input"
+    "size": [1, 2],
+    "inventory_kind": "input",
+    "states": {
+        "on": {
+            "default_image": true,
+            "light": {
+                "radius": 5,
+                "intensity": 130,
+                "color": "#ffffff"
+            }
+        },
+        "off": {"default": true}
+    }
 }

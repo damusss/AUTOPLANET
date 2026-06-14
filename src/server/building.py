@@ -19,8 +19,8 @@ if typing.TYPE_CHECKING:
 EnergyConn_t: type["EnergyConn"] = None
 
 
-class CommonBuildingExt:
-    def __init__(self, building: "Building|MovingBuilding"):
+class BuildingExt:
+    def __init__(self, building: "StaticBuilding|MovingBuilding"):
         self.building = building
         self.destroyed = False
         self.inventories: dict[str, BuildingInventory | None] = {
@@ -42,16 +42,15 @@ class CommonBuildingExt:
     def on_client_config(self, mail: shared.Mail): ...
 
     def on_destroy(self):
+        self.destroyed = True
         self.drop_inventories()
 
     def drop_inventories(self):
         for inv in self.inventories.values():
             if inv is None:
                 continue
-            else:
-                for slot in inv.slots:
-                    if slot.empty:
-                        continue
+            for slot in inv.slots:
+                if not slot.empty:
                     god.world.drop(
                         shared.get_drop_random_pos(self.building.hitbox),
                         slot.item,
@@ -83,7 +82,7 @@ class CommonBuildingExt:
         return {}
 
 
-class MovingBuildingExt(CommonBuildingExt):
+class MovingBuildingExt(BuildingExt):
     building: "MovingBuilding"
     REGISTERED_EXTENSIONS: dict[str, type["MovingBuildingExt"]] = {}
 
@@ -100,7 +99,7 @@ class MovingBuildingExt(CommonBuildingExt):
             building.building_od.name_id, MovingBuildingExt
         )(building)
 
-    def on_reach(self, target: "Building|None", kind: str | None): ...
+    def on_reach(self, target: "StaticBuilding|None", kind: str | None): ...
 
     def get_inventories_data(self):
         data = super().get_inventories_data()
@@ -110,23 +109,23 @@ class MovingBuildingExt(CommonBuildingExt):
     def get_display_data(self): ...
 
 
-class BuildingExt(CommonBuildingExt):
-    building: "Building"
-    REGISTERED_EXTENSIONS: dict[str, type["BuildingExt"]] = {}
+class StaticBuildingExt(BuildingExt):
+    building: "StaticBuilding"
+    REGISTERED_EXTENSIONS: dict[str, type["StaticBuildingExt"]] = {}
 
-    def __init__(self, building: "Building"):
+    def __init__(self, building: "StaticBuilding"):
         super().__init__(building)
         self.disrupt_alert = False
         self.energy_conns: list["EnergyConn"] = []
         self.init()
 
     def __init_subclass__(cls, name_id: str):
-        BuildingExt.REGISTERED_EXTENSIONS[name_id] = cls
+        StaticBuildingExt.REGISTERED_EXTENSIONS[name_id] = cls
 
     @classmethod
-    def create_ext(cls, building: "Building") -> "BuildingExt":
-        return BuildingExt.REGISTERED_EXTENSIONS.get(
-            building.building_od.name_id, BuildingExt
+    def create_ext(cls, building: "StaticBuilding") -> "StaticBuildingExt":
+        return StaticBuildingExt.REGISTERED_EXTENSIONS.get(
+            building.building_od.name_id, StaticBuildingExt
         )(building)
 
     def can_provide_energy(self):
@@ -146,6 +145,7 @@ class BuildingExt(CommonBuildingExt):
         self.destroyed = True
         for conn in list(self.energy_conns):
             conn.destroy()
+        self.drop_inventories()
 
     def on_conn_activated(self, conn: "EnergyConn"):
         if self.disrupt_alert:
@@ -157,8 +157,7 @@ class BuildingExt(CommonBuildingExt):
             return
         self.building.has_energy = True
         self.on_energy_awake()
-        self.building.refresh_interact()
-        self.building.chunk.refresh()
+        self.building.refresh_everything()
 
     def on_conn_disrupted(self, conn: "EnergyConn", state: set):
         if self.building.id in state:
@@ -178,8 +177,7 @@ class BuildingExt(CommonBuildingExt):
         self.disrupt_alert = False
         self.building.has_energy = False
         self.on_energy_sleep()
-        self.building.refresh_interact()
-        self.building.chunk.refresh()
+        self.building.refresh_everything()
 
     def send_energy_activation(self): ...
 
@@ -187,10 +185,14 @@ class BuildingExt(CommonBuildingExt):
 
     def on_energy_sleep(self): ...
 
+    def on_mold_infect(self): ...
+
+    def on_mold_purge(self): ...
+
     def get_extra_data(self): ...
 
 
-class CommonBuilding:
+class Building:
     def refresh_interact(self):
         for player in self.subscribed_client_players:
             if self.ext.destroyed:
@@ -209,8 +211,17 @@ class CommonBuilding:
                 )
 
 
-class Building(CommonBuilding):
-    def __init__(self, id_: str, building_od: BuildingOD, topleft, chunk):
+class StaticBuilding(Building):
+    def __init__(
+        self,
+        id_: str,
+        building_od: BuildingOD,
+        topleft,
+        chunk,
+        mold_potential=0,
+        mold_potential_count=0,
+        mold_sanitizers=0,
+    ):
         self.id = id_
         self.building_od = building_od
         self.hitbox = pygame.FRect(topleft, building_od.size)
@@ -218,17 +229,35 @@ class Building(CommonBuilding):
         self.bordering_chunks: list["Chunk"] = []
         self.state = self.building_od.states["default"].name
         self.has_energy = False
+        self.moldy = False
+        self.mold_potential = mold_potential
+        self.mold_potential_count = mold_potential_count
+        self.mold_sanitizers = mold_sanitizers
+        if self.building_od.need_energy:
+            self.mold_potential += constants.POTENTIAL_ENERGY_BUILDING_SPREAD_RADIUS
+            self.mold_potential_count += 1
         self.require_floor = True
         self.bots_endpoint = {}
         self.subscribed_client_players: list["Player"] = []
-        self.ext = BuildingExt.create_ext(self)
+        self.ext = StaticBuildingExt.create_ext(self)
 
-    def change_state(self, state):
+    def change_state(self, state, refresh_interact=False):
         if self.state == state:
+            if refresh_interact:
+                self.refresh_interact()
             return
         self.state = state
-        self.refresh_interact()
-        self.chunk.refresh()
+        self.refresh_everything()
+
+    def make_moldy(self):
+        self.moldy = True
+        self.ext.on_mold_infect()
+        self.refresh_everything()
+
+    def purge_mold(self):
+        self.moldy = False
+        self.ext.on_mold_purge()
+        self.refresh_everything()
 
     def on_place(self):
         self.ext.on_place()
@@ -246,12 +275,29 @@ class Building(CommonBuilding):
         self.ext.on_destroy()
         self.refresh_interact()
 
+    def refresh_everything(self):
+        self.refresh_interact()
+        self.chunk.refresh()
+
     def get_raycast_data(self, raycast_flag):
         if raycast_flag == constants.RAYCASTFLAG_INFO:
             extra_data = self.ext.get_extra_raycast_data()
             if extra_data is not None:
-                return [self.id, self.state, self.has_energy, extra_data]
-        return [self.id, self.state, self.has_energy]
+                return [
+                    self.id,
+                    self.state,
+                    int(self.has_energy),
+                    int(self.moldy),
+                    int(self.mold_sanitizers > 0),
+                    extra_data,
+                ]
+        return [
+            self.id,
+            self.state,
+            int(self.has_energy),
+            int(self.moldy),
+            int(self.mold_sanitizers > 0),
+        ]
 
     def get_client_data(self):
         data: list = [
@@ -260,7 +306,8 @@ class Building(CommonBuilding):
             int(self.hitbox.x),
             int(self.hitbox.y),
             self.state,
-            self.has_energy,
+            int(self.has_energy),
+            int(self.moldy),
         ]
         extra = self.ext.get_extra_data()
         if extra is not None:
@@ -268,7 +315,7 @@ class Building(CommonBuilding):
         return data
 
 
-class MovingBuilding(CommonBuilding):
+class MovingBuilding(Building):
     def __init__(self, id_: str, building_od: BuildingOD, center, chunk_key):
         self.id = id_
         self.reach_id = None
@@ -276,7 +323,7 @@ class MovingBuilding(CommonBuilding):
         self.center = pygame.Vector2(center)
         self.subscribed_client_players: list["Player"] = []
         self.moving = False
-        self.move_target: Building | None = None
+        self.move_target: StaticBuilding | None = None
         self.target_kind: str | None = None
         self.last_known_center = self.center
         self.last_known_time = 0
@@ -284,7 +331,7 @@ class MovingBuilding(CommonBuilding):
         self.speed_ps = constants.BOT_SPEED_PS
         self.trajectory_chunks = set()
         self.temporary_trajectory_chunks = set()
-        self.trajectory: dict[str, Building | None] = {
+        self.trajectory: dict[str, StaticBuilding | None] = {
             "in": None,
             "out": None,
         }
@@ -331,7 +378,7 @@ class MovingBuilding(CommonBuilding):
         self.update_trajectory_chunks(chunks)
         self.depart(self.trajectory["in"], constants.INVENTORY_KIND_INPUT)
 
-    def depart(self, target: Building | None, kind):
+    def depart(self, target: StaticBuilding | None, kind):
         if target is None:
             return
         self.moving = True

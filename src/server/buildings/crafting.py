@@ -4,11 +4,11 @@ from src.server import god
 from src.timerc import timerc
 from src.shared import Slot
 from src.object_data import ItemOD
-from src.server.building import BuildingExt
+from src.server.building import StaticBuildingExt
 from src.server.inventory import BuildingInventory
 
 
-class Crafter(BuildingExt, name_id="crafter"):
+class Crafter(StaticBuildingExt, name_id="crafter"):
     def init(self):
         in_inv = BuildingInventory(self)
         for i in range(constants.CRAFTER_INVENTORY_SIZE):
@@ -31,7 +31,6 @@ class Crafter(BuildingExt, name_id="crafter"):
             if not self.working:
                 self.try_to_work()
         self.building.refresh_interact()
-        self.building.chunk.refresh()
 
     def get_config(self):
         return {"recipe_uid": ItemOD.uid_or_none(self.recipe)}
@@ -42,7 +41,7 @@ class Crafter(BuildingExt, name_id="crafter"):
         self.building.refresh_interact()
 
     def try_to_work(self):
-        if not self.building.has_energy:
+        if not self.building.has_energy or self.building.moldy:
             return False
         if self.recipe is None:
             return False
@@ -69,6 +68,10 @@ class Crafter(BuildingExt, name_id="crafter"):
             self.stop_working()
 
     def on_energy_awake(self):
+        if not self.working:
+            self.try_to_work()
+
+    def on_mold_purge(self):
         if not self.working:
             self.try_to_work()
 
