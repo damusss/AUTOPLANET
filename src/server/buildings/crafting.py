@@ -89,7 +89,7 @@ class Crafter(StaticBuildingExt, name_id="crafter"):
     def get_extra_data(self):
         return {
             "working": self.working,
-            "recipe_uid": self.recipe.uid if self.recipe is not None else None,
+            "recipe_uid": ItemOD.uid_or_none(self.recipe),
             "work_start_time": shared.eval_delta(self.work_start_time),
         }
 
